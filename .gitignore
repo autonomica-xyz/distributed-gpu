@@ -17,3 +17,6 @@ logs*.csv
 /state/
 /outputs/
 /docs/historical/
+/config/private.env
+/config/*.private.*
+/config/secrets/
