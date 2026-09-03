@@ -1,0 +1,100 @@
+api_version: distributed-gpu.example/v1alpha1
+name: translate-text-batch
+version: "1"
+description: >
+  Ordered, bounded batches of independent text segments translated through a
+  pinned warm LibreTranslate service. All segments share one schema-bounded
+  language pair. Producers own item identity and map ordered results back to
+  their domain records; workers receive no producer-specific identifiers.
+default_route: libretranslate-batch-v1
+payload_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required: [segments, source, target]
+  properties:
+    segments:
+      type: array
+      minItems: 1
+      maxItems: 64
+      items:
+        type: string
+        minLength: 1
+        maxLength: 20000
+    source:
+      type: string
+      enum: [auto, en, ar, bg, bn, ca, cs, da, de, el, es, fa, fr, he, hi,
+             hu, id, it, ja, ko, lv, nl, pl, pt, ro, ru, sl, sq, sv, sw, th,
+             tr, uk, vi, zh]
+    target:
+      type: string
+      enum: [en, ar, bg, bn, ca, cs, da, de, el, es, fa, fr, he, hi, hu, id,
+             it, ja, ko, lv, nl, pl, pt, ro, ru, sl, sq, sv, sw, th, tr, uk,
+             vi, zh]
+inputs: []
+outputs:
+  - name: translations
+    media_types: [application/json]
+    max_bytes: 2097152
+    validator: json_schema
+    schema:
+      type: object
+      additionalProperties: false
+      required: [job_id, source_language, target_language, segment_count,
+                 source_character_count, elapsed_seconds, translations]
+      properties:
+        job_id: {type: string, minLength: 1}
+        source_language: {type: string, minLength: 2}
+        target_language: {type: string, minLength: 2}
+        segment_count: {type: integer, minimum: 1, maximum: 64}
+        source_character_count: {type: integer, minimum: 1, maximum: 256000}
+        elapsed_seconds: {type: number, minimum: 0}
+        translations:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items: {type: string}
+routes:
+  libretranslate-batch-v1:
+    compatibility:
+      capability: libretranslate-batch
+      model_packs: [libretranslate-1.9.6-bounded-sbd]
+    resources:
+      gpu_count: 1
+      vendor: nvidia
+      min_vram_mb: 8192
+      min_compute_capability: "6.1"
+      gpu_models:
+        ["*GTX 1070*", "*GTX 1080*", "*RTX 2060*", "*RTX 2070*", "*RTX 2080*", "*RTX 3050*", "*RTX 3060*",
+         "*RTX 3070*", "*RTX 3080*", "*RTX 3090*", "*RTX 4060*", "*RTX 4070*", "*RTX 4080*", "*RTX 4090*",
+         "*Quadro RTX 4000*", "*Quadro RTX 5000*", "*RTX A4000*", "*RTX A5000*", "*RTX A6000*"]
+      min_cpu_cores: 4
+      min_ram_mb: 12288
+      min_disk_mb: 30720
+    executor:
+      type: plugin
+      handler: gpu_orchestrator_workloads.libretranslate:LibreTranslateBatchExecutor
+      timeout_seconds: 600
+      environment:
+        LIBRETRANSLATE_ENDPOINT: http://127.0.0.1:5001/translate
+        LIBRETRANSLATE_FORMAT: text
+    cost:
+      unit: segment
+      default_units_per_job: 1
+      payload_items_field: segments
+      default_units_per_gpu_hour: 7200
+    scaling:
+      min_slots: 0
+      max_slots: 8
+      target_completion_hours: 2
+      startup_minutes: 20
+      scale_down_idle_minutes: 10
+retry:
+  max_attempts: 3
+  retryable_error_codes:
+    - worker_lost
+    - provider_interrupted
+    - artifact_transport_failed
+    - gpu_oom
+    - model_server_unavailable
+    - model_server_error

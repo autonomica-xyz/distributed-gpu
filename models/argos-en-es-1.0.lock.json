@@ -1,0 +1,17 @@
+{
+  "archive_root": "en_es",
+  "argos_version": "1.0",
+  "evaluation_only": true,
+  "from_code": "en",
+  "model_pack": "argos-en-es-1.0-d698d0ef",
+  "package_version": "1.0",
+  "provenance": [
+    "OPUS OpenSubtitles",
+    "OPUS ParaCrawl",
+    "OPUS UNPC",
+    "Stanford Stanza"
+  ],
+  "sha256": "d698d0ef87ad70d5d184b7fa6965905bf4368f09a2bb9ffb165a79bac96af0c4",
+  "to_code": "es",
+  "url": "https://argos-net.com/v1/translate-en_es-1_0.argosmodel"
+}

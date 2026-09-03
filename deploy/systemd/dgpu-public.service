@@ -1,0 +1,54 @@
+[Unit]
+Description=Distributed GPU public authenticated API backend
+Documentation=file:///opt/dgpu/docs/provider-workers.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=dgpu-public
+Group=dgpu
+WorkingDirectory=/srv/dgpu-public
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/srv/dgpu-public/src
+# Keep provider lifecycle and its credentials off the Internet-facing process.
+Environment=DGPU_PUBLIC_URL=
+# Expose only the executable runtime/config snapshot into this mount namespace.
+BindReadOnlyPaths=/opt/dgpu/.venv:/srv/dgpu-public/.venv
+BindReadOnlyPaths=/opt/dgpu/src:/srv/dgpu-public/src
+BindReadOnlyPaths=/opt/dgpu/workloads:/srv/dgpu-public/workloads
+BindReadOnlyPaths=/opt/dgpu/pools:/srv/dgpu-public/pools
+BindReadOnlyPaths=/opt/dgpu/dist:/srv/dgpu-public/dist
+# The bind contains live state, but filesystem modes expose only control.sqlite3
+# and artifacts to group dgpu; historical test state remains owner-only.
+BindPaths=/opt/dgpu/state:/srv/dgpu-public/state
+InaccessiblePaths=/home /opt/legacy /etc/dgpu
+ExecStart=/usr/bin/env /srv/dgpu-public/.venv/bin/python \
+  /srv/dgpu-public/.venv/bin/dgpu serve \
+  --db /srv/dgpu-public/state/control.sqlite3 \
+  --workloads /srv/dgpu-public/workloads \
+  --artifacts /srv/dgpu-public/state/artifacts \
+  --pools /srv/dgpu-public/pools \
+  --bootstrap-dir /srv/dgpu-public/dist \
+  --no-dashboard --host 10.0.0.10 --port 8089 --log-level warning
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=30s
+KillSignal=SIGINT
+UMask=0007
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

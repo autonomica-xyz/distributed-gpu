@@ -1,0 +1,32 @@
+api_version: distributed-gpu.example/v1alpha1
+id: image-standard
+workload: image-generate
+route: diffusers-sdxl
+worker_prefix: image-standard
+image: ghcr.io/example/distributed-gpu-image-worker@sha256:0000000000000000000000000000000000000000000000000000000000000000
+command:
+  - dgpu
+  - agent
+  - --agent-id
+  - "${DGPU_AGENT_ID}"
+  - --capability
+  - image-generate
+  - --model-pack
+  - sdxl-base-1.0-fp16-76d28af
+environment:
+  DGPU_ENDPOINT: https://gpu-control.example.com
+  IMAGE_WORKER_PROFILE: diffusers-sdxl
+providers:
+  local:
+    enabled: true
+    max_hourly_cost_usd: 0.01
+    require_known_credit: false
+  vast:
+    enabled: true
+    max_hourly_cost_usd: 0.50
+    require_known_credit: true
+  salad:
+    enabled: true
+    max_hourly_cost_usd: 0.50
+    expected_hourly_cost_usd: 0.25
+    require_known_credit: true

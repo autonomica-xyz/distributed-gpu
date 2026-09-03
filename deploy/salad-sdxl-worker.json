@@ -1,0 +1,36 @@
+{
+  "autostart_policy": true,
+  "container": {
+    "command": [
+      "bash",
+      "-lc",
+      "python -m pip install --no-cache-dir \"$DGPU_WHEEL_URL\" diffusers==0.35.2 transformers==4.57.6 accelerate==1.12.0 safetensors==0.7.0 && exec dgpu agent --endpoint \"$DGPU_ENDPOINT\" --agent-id \"$DGPU_AGENT_ID\" --provider salad --provider-resource-id \"$DGPU_PROVIDER_RESOURCE_ID\" --capability image-generate --model-pack sdxl-base-1.0-fp16-76d28af --label pool=image-standard --workdir /work --heartbeat-seconds 15 --lease-seconds 120"
+    ],
+    "environment_variables": {},
+    "image": "pytorch/pytorch@sha256:c8268a92a69bd500f8be0e665b2630ee006dadaf7bfbc24249141b15ff622755",
+    "image_caching": true,
+    "logging": null,
+    "priority": "high",
+    "registry_authentication": null,
+    "resources": {
+      "cpu": 4,
+      "gpu_classes": [
+        "ed563892-aacd-40f5-80b7-90c9be6c759b"
+      ],
+      "memory": 16384,
+      "shm_size": 1024,
+      "storage_amount": 32212254720
+    }
+  },
+  "liveness_probe": null,
+  "networking": null,
+  "queue_autoscaler": null,
+  "queue_connection": null,
+  "readiness_probe": null,
+  "readme": "# Distributed GPU SDXL worker\n\nEphemeral one-GPU worker with a scoped queue identity and no storage or provider credentials.",
+  "replicas": 1,
+  "restart_policy": "always",
+  "scaling_actions": [],
+  "scheduled_scaling_enabled": false,
+  "startup_probe": null
+}

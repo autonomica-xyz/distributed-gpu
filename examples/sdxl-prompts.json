@@ -1,0 +1,38 @@
+[
+  {
+    "name": "winter-greenhouse",
+    "payload": {
+      "prompt": "A tiny glass greenhouse perched on a snow-covered city rooftop at blue hour, warm amber grow lights glowing through frosted panes, delicate herbs and citrus trees visible inside, fresh snowflakes in the air, cinematic architectural photography, realistic materials, intricate detail",
+      "negative_prompt": "text, watermark, logo, blurry, low detail, distorted architecture, oversaturated",
+      "width": 1024,
+      "height": 1024,
+      "steps": 30,
+      "guidance_scale": 7.0,
+      "seed": 17421
+    }
+  },
+  {
+    "name": "lunar-mail",
+    "payload": {
+      "prompt": "A compact retro-futurist lunar mail truck crossing a vast moon crater, parcels secured on the roof, Earth rising over the horizon, practical 1970s industrial design, long crisp shadows, fine lunar dust, highly detailed cinematic concept art",
+      "negative_prompt": "text, watermark, logo, malformed wheels, extra vehicles, blurry, low detail, cartoon",
+      "width": 1024,
+      "height": 1024,
+      "steps": 30,
+      "guidance_scale": 7.5,
+      "seed": 88203
+    }
+  },
+  {
+    "name": "floating-botanical-island",
+    "payload": {
+      "prompt": "A scientific botanical cutaway illustration of a small floating island, wildflowers and an ancient wind-bent tree above, layered soil, roots, crystal caverns and a spring visible below, clean ivory background, precise naturalist rendering, subtle watercolor pigments, museum plate composition",
+      "negative_prompt": "text, labels, watermark, logo, cluttered background, blurry, neon colors, photorealistic frame",
+      "width": 1024,
+      "height": 1024,
+      "steps": 32,
+      "guidance_scale": 7.0,
+      "seed": 39017
+    }
+  }
+]

@@ -1,0 +1,40 @@
+[Unit]
+Description=Distributed GPU private operator control plane
+Documentation=file:///opt/dgpu/docs/provider-workers.md
+Wants=network-online.target
+After=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=user
+Group=user
+WorkingDirectory=/opt/dgpu
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/dgpu/controller.env
+SupplementaryGroups=dgpu
+ExecStart=/opt/dgpu/.venv/bin/dgpu serve \
+  --db /opt/dgpu/state/control.sqlite3 \
+  --workloads /opt/dgpu/workloads \
+  --artifacts /opt/dgpu/state/artifacts \
+  --pools /opt/dgpu/pools \
+  --bootstrap-dir /opt/dgpu/dist \
+  --dashboard --host 127.0.0.1 --port 8088 --log-level warning
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=30s
+KillSignal=SIGINT
+# Runtime state is shared with the isolated public process through group dgpu.
+UMask=0007
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

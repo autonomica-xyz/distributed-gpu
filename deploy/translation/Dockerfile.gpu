@@ -1,0 +1,23 @@
+FROM nvidia/cuda@sha256:9175fa92f96de35a8cfb9493f0dfcf9435c7a597e9d95ad41d2cae382a95e3f9
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    ARGOS_MODEL_DIR=/opt/models/en_es
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-pip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY dist/distributed_gpu-*.whl /tmp/
+RUN python3 -m pip install --break-system-packages --no-cache-dir \
+      /tmp/distributed_gpu-*.whl \
+      ctranslate2==4.8.1 \
+      sentencepiece==0.2.2 \
+      sacremoses==0.1.1 \
+      subword-nmt==0.3.8 \
+    && rm /tmp/distributed_gpu-*.whl
+COPY state/model-packs/en_es/ /opt/models/en_es/
+
+ENTRYPOINT ["dgpu"]
+CMD ["--help"]

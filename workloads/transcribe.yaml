@@ -1,0 +1,78 @@
+api_version: distributed-gpu.example/v1alpha1
+name: transcribe
+version: "1"
+description: Contract scaffold for legacy-compatible transcription as a standalone workload pack.
+default_route: parakeet
+payload_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: true
+  required: [expected_language, expected_language_source, audio_hours]
+  properties:
+    expected_language: {type: string, pattern: "^[a-z]{2,3}$"}
+    expected_language_source: {type: string, minLength: 1}
+    audio_hours: {type: number, exclusiveMinimum: 0, maximum: 24}
+    hotwords: {type: [string, array]}
+    diarize: {type: boolean, default: false}
+inputs:
+  - name: audio
+    media_types: [audio/mpeg, audio/wav, audio/flac, audio/mp4]
+    max_bytes: 17179869184
+    validator: media_probe
+outputs:
+  - name: transcript
+    media_types: [application/json]
+    max_bytes: 104857600
+    validator: json
+routes:
+  parakeet:
+    compatibility:
+      capability: transcribe-parakeet
+      model_packs: [parakeet-tdt-0.6b-v3]
+    resources:
+      gpu_count: 1
+      vendor: nvidia
+      min_vram_mb: 8192
+      min_cpu_cores: 4
+      min_ram_mb: 8192
+      min_disk_mb: 20480
+    executor:
+      type: plugin
+      handler: gpu_orchestrator_workloads.transcription:ParakeetExecutor
+      timeout_seconds: 14400
+    cost:
+      unit: audio_hour
+      default_units_per_job: 0.75
+      payload_units_field: audio_hours
+      default_units_per_gpu_hour: 75
+    scaling: {min_slots: 0, max_slots: 20, target_completion_hours: 6, startup_minutes: 30}
+  whisperx:
+    compatibility:
+      capability: transcribe-whisperx
+      model_packs: [whisperx-large-v3]
+    resources:
+      gpu_count: 1
+      vendor: nvidia
+      min_vram_mb: 8192
+      min_cpu_cores: 4
+      min_ram_mb: 12288
+      min_disk_mb: 30720
+    executor:
+      type: plugin
+      handler: gpu_orchestrator_workloads.transcription:WhisperXExecutor
+      timeout_seconds: 14400
+    cost:
+      unit: audio_hour
+      default_units_per_job: 0.75
+      payload_units_field: audio_hours
+      default_units_per_gpu_hour: 15
+    scaling: {min_slots: 0, max_slots: 20, target_completion_hours: 12, startup_minutes: 30}
+retry:
+  max_attempts: 4
+  retryable_error_codes:
+    - worker_lost
+    - provider_interrupted
+    - artifact_transport_failed
+    - gpu_oom
+    - cuda_context_failure
+    - ffmpeg_decode_error

@@ -1,0 +1,48 @@
+api_version: distributed-gpu.example/v1alpha1
+name: demo-cpu
+version: "1"
+description: A tiny CPU workload for worker e2e tests.
+default_route: command
+payload_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required: [message]
+  properties:
+    message:
+      type: string
+      minLength: 1
+      maxLength: 1000
+inputs: []
+outputs:
+  - name: result
+    media_types: [application/json]
+    max_bytes: 1048576
+    validator: json
+routes:
+  command:
+    compatibility:
+      capability: demo-cpu
+      model_packs: []
+    resources:
+      gpu_count: 1
+      vendor: cpu
+      min_vram_mb: 0
+      min_cpu_cores: 0
+      min_ram_mb: 0
+      min_disk_mb: 0
+    executor:
+      type: command
+      command: ["{agent_python}", -m, gpu_orchestrator.demo_executor]
+      timeout_seconds: 60
+    cost:
+      unit: item
+      default_units_per_job: 1
+      default_units_per_gpu_hour: 3600
+    scaling:
+      enabled: false
+      min_slots: 0
+      max_slots: 1
+retry:
+  max_attempts: 3
+  retryable_error_codes: [worker_lost, provider_interrupted]

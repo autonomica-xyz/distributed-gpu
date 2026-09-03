@@ -1,0 +1,9 @@
+*
+!dist/
+!dist/distributed_gpu-*.whl
+!state/
+!state/model-packs/
+!state/model-packs/en_es/
+!state/model-packs/en_es/**
+!state/model-shards/
+!state/model-shards/**

@@ -1,0 +1,63 @@
+api_version: distributed-gpu.example/v1alpha1
+name: llm-batch
+version: "1"
+description: Contract scaffold for asynchronous prompt batches against a warm Qwen model server.
+default_route: qwen35-9b-awq
+payload_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required: [prompts, max_output_tokens]
+  properties:
+    prompts:
+      type: array
+      minItems: 1
+      maxItems: 64
+      items: {type: string, minLength: 1, maxLength: 131072}
+    max_output_tokens: {type: integer, minimum: 1, maximum: 8192}
+    temperature: {type: number, minimum: 0, maximum: 2, default: 0.7}
+    top_p: {type: number, exclusiveMinimum: 0, maximum: 1, default: 0.8}
+inputs: []
+outputs:
+  - name: responses
+    media_types: [application/json]
+    max_bytes: 67108864
+    validator: json
+routes:
+  qwen35-9b-awq:
+    compatibility:
+      capability: llm-batch
+      model_packs: [qwen3.5-9b-awq]
+    resources:
+      gpu_count: 1
+      vendor: nvidia
+      min_vram_mb: 16384
+      min_compute_capability: "8.0"
+      min_cpu_cores: 4
+      min_ram_mb: 16384
+      min_disk_mb: 30720
+    executor:
+      type: plugin
+      handler: gpu_orchestrator_workloads.qwen:VllmBatchExecutor
+      timeout_seconds: 1800
+      environment:
+        VLLM_BASE_URL: http://127.0.0.1:8000
+        VLLM_MODEL: Qwen/Qwen3.5-9B
+    cost:
+      unit: reserved_output_token
+      default_units_per_job: 1024
+      payload_units_field: max_output_tokens
+      payload_items_field: prompts
+      default_units_per_gpu_hour: 250000
+    scaling:
+      min_slots: 0
+      max_slots: 10
+      target_completion_hours: 1
+      startup_minutes: 15
+retry:
+  max_attempts: 3
+  retryable_error_codes:
+    - worker_lost
+    - provider_interrupted
+    - model_server_unavailable
+    - artifact_transport_failed

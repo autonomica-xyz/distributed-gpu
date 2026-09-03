@@ -1,0 +1,63 @@
+# Example pool: ordered translation-batch workers on rented capacity.
+#
+# The image below is the official Python 3.10 LibreTranslate CUDA image pinned
+# by digest. The DGPU wheel supports Python >=3.10. For production, build an
+# image that pre-bakes the wheel, sitecustomize shim, and audited language packs,
+# then pin that digest here — startup installation/download is integration-only.
+api_version: distributed-gpu.example/v1alpha1
+id: translate-batch-live
+workload: translate-text-batch
+route: libretranslate-batch-v1
+worker_prefix: translatebatchlive
+image: libretranslate/libretranslate@sha256:726d14b752c6a9c5463f4e2b8f3aab5e78602b6eb4b341a86b8b18c8a2da0052
+command:
+  - bash
+  - -lc
+  - >-
+    libretranslate --host 127.0.0.1 --port 5001 --disable-web-ui
+    --disable-files-translation --char-limit 20000 --batch-limit 64
+    --req-limit 1200 --load-only en,ar,bg,bn,ca,cs,da,de,el,es,fa,fr,he,hi,hu,id,it,ja,ko,lv,nl,pl,pt,ro,ru,sl,sq,sv,sw,th,tr,uk,vi,zh &
+    MODEL_PID=$!;
+    python -m pip install --no-cache-dir "$DGPU_WHEEL_URL" &&
+    until python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/languages',timeout=5)";
+    do kill -0 "$MODEL_PID" || exit 1; sleep 5; done &&
+    exec dgpu agent --endpoint "$DGPU_ENDPOINT" --agent-id "$DGPU_AGENT_ID"
+    --provider salad --provider-resource-id "$DGPU_PROVIDER_RESOURCE_ID"
+    --capability libretranslate-batch --model-pack libretranslate-1.9.6-bounded-sbd
+    --label pool=translate-batch-live --workdir /work --heartbeat-seconds 15
+    --lease-seconds 120 --poll-seconds 2
+environment:
+  ARGOS_DEVICE_TYPE: cuda
+  PYTHONUNBUFFERED: "1"
+providers:
+  vast:
+    enabled: true
+    max_hourly_cost_usd: 0.30
+    require_known_credit: true
+  salad:
+    enabled: true
+    max_hourly_cost_usd: 0.30
+    # Salad has no stable credit endpoint. Deploy remains operator-confirmed;
+    # live GPU-class pricing and availability are shown before confirmation.
+    require_known_credit: false
+provider_templates:
+  salad:
+    autostart_policy: true
+    container:
+      # command/image are replaced by the pool command/image at launch
+      command: ["bash", "-lc", "true"]
+      environment_variables: {}
+      image: libretranslate/libretranslate@sha256:726d14b752c6a9c5463f4e2b8f3aab5e78602b6eb4b341a86b8b18c8a2da0052
+      image_caching: true
+      # Replaced at deploy time by the trusted priced offer selected in the UI.
+      priority: high
+      resources:
+        cpu: 4
+        memory: 12288
+        shm_size: 1024
+        storage_amount: 32212254720
+        # RTX 2070 class (cc 7.5, 8 GB) — the batch-priority price/performance
+        # tier for translation per the project's benchmark guidance.
+        gpu_classes: ["2aec4fc1-2270-4e40-b8cc-6e69fae61d4f"]
+    restart_policy: always
+    replicas: 1

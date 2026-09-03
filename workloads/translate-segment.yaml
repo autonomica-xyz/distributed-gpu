@@ -1,0 +1,93 @@
+api_version: distributed-gpu.example/v1alpha1
+name: translate-segment
+version: "1"
+description: >
+  One bounded text segment translated by a pinned local CUDA LibreTranslate
+  service. A job selects only its text and a schema-bounded source/target
+  language pair from the set the service loads; the endpoint, wire format,
+  and response bound are fixed by this trusted route. Any number of worker
+  hosts can serve this capability, each with its own loopback model service.
+  For bulk throughput prefer the offline translate-batch workload, which
+  amortizes queue overhead across many segments per job.
+default_route: libretranslate-v1
+payload_schema:
+  $schema: https://json-schema.org/draft/2020-12/schema
+  type: object
+  additionalProperties: false
+  required: [text, source, target]
+  properties:
+    text:
+      type: string
+      minLength: 1
+      maxLength: 20000
+      description: One segment of source text. Matches the service char-limit.
+    source:
+      type: string
+      enum: [auto, en, ar, bg, bn, ca, cs, da, de, el, es, fa, fr, he, hi,
+             hu, id, it, ja, ko, lv, nl, pl, pt, ro, ru, sl, sq, sv, sw, th,
+             tr, uk, vi, zh]
+      description: Source language; "auto" lets the service detect it.
+    target:
+      type: string
+      enum: [en, ar, bg, bn, ca, cs, da, de, el, es, fa, fr, he, hi, hu, id,
+             it, ja, ko, lv, nl, pl, pt, ro, ru, sl, sq, sv, sw, th, tr, uk,
+             vi, zh]
+      description: Target language. Explicit; the service does not detect it.
+inputs: []
+outputs:
+  - name: translation
+    media_types: [text/plain]
+    max_bytes: 2097152
+    validator: sha256
+routes:
+  libretranslate-v1:
+    compatibility:
+      capability: libretranslate
+      model_packs: [libretranslate-1.9.6-bounded-sbd]
+    resources:
+      gpu_count: 1
+      vendor: nvidia
+      min_vram_mb: 8192
+      min_compute_capability: "6.1"
+      # Pascal GTX 1070/1080/1080 Ti cards can execute CTranslate2 CUDA but
+      # lack the cc>=7 Tensor Core fast path. Keep them eligible and measure
+      # cost per translated unit rather than assuming hourly price wins.
+      gpu_models:
+        ["*GTX 1070*", "*GTX 1080*", "*RTX 2060*", "*RTX 2070*", "*RTX 2080*", "*RTX 3050*", "*RTX 3060*",
+         "*RTX 3070*", "*RTX 3080*", "*RTX 3090*", "*RTX 4060*", "*RTX 4070*",
+         "*RTX 4080*", "*RTX 4090*", "*Quadro RTX 4000*", "*Quadro RTX 5000*",
+         "*RTX A4000*", "*RTX A5000*", "*RTX A6000*"]
+      min_cpu_cores: 4
+      min_ram_mb: 12288
+      min_disk_mb: 30720
+    executor:
+      type: plugin
+      handler: gpu_orchestrator_workloads.libretranslate:LibreTranslateExecutor
+      timeout_seconds: 180
+      environment:
+        # Loopback-only model service co-located with the agent. Remap per
+        # host if port 5001 is occupied; never expose it off the host.
+        LIBRETRANSLATE_ENDPOINT: http://127.0.0.1:5001/translate
+        LIBRETRANSLATE_FORMAT: text
+    cost:
+      unit: segment
+      default_units_per_job: 1
+      # Initial conservative prior (one warm segment per second per GPU);
+      # replace with measured segments/GPU-hour per language pair and GPU
+      # class before trusting autonomous scaling decisions.
+      default_units_per_gpu_hour: 3600
+    scaling:
+      min_slots: 0
+      max_slots: 8
+      target_completion_hours: 2
+      startup_minutes: 20
+      scale_down_idle_minutes: 10
+retry:
+  max_attempts: 3
+  retryable_error_codes:
+    - worker_lost
+    - provider_interrupted
+    - artifact_transport_failed
+    - gpu_oom
+    - model_server_unavailable
+    - model_server_error
