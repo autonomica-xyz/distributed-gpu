@@ -44,8 +44,6 @@ To also verify that the package builds cleanly:
 
 New workload routes must pin exact model IDs, revisions, and digests. Do not
 allow job payloads to select model files, LoRAs, or container images at runtime.
-See `docs/translation-model-shards.md` and `AGENTS.md` for the review and
-packaging process used by the existing routes.
 
 ## Pull requests
 

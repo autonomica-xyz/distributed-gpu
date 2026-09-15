@@ -1,7 +1,7 @@
 api_version: distributed-gpu.example/v1alpha1
 name: transcribe
 version: "1"
-description: Contract scaffold for legacy-compatible transcription as a standalone workload pack.
+description: Contract scaffold for transcription as a standalone workload pack.
 default_route: parakeet
 payload_schema:
   $schema: https://json-schema.org/draft/2020-12/schema

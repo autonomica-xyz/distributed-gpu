@@ -1,6 +1,6 @@
 [Unit]
 Description=Distributed GPU private operator control plane
-Documentation=file:///opt/dgpu/docs/provider-workers.md
+Documentation=file:///opt/dgpu/README.md
 Wants=network-online.target
 After=network-online.target tailscaled.service
 

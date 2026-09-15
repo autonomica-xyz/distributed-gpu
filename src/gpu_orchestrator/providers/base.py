@@ -98,8 +98,8 @@ def destroy_and_verify_absent(
     """Destroy and require authoritative provider absence before returning.
 
     Callers must not remove worker credentials or local accounting rows until
-    this function succeeds. This is the most important operational invariant
-    carried over from the legacy system.
+    this function succeeds. Provider inventory absence is required before
+    credential retirement.
     """
 
     driver.destroy(resource_id)

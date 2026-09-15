@@ -1,8 +1,8 @@
 """SQLite persistence and atomic GPU-slot job leasing.
 
-SQLite is deliberately retained from the legacy system: for a small control plane it is
-easy to audit, back up, and operate. ``BEGIN IMMEDIATE`` serializes the short
-claim transaction so two GPU slots can never receive the same job.
+SQLite is used because a small control plane is easy to audit, back up, and
+operate. ``BEGIN IMMEDIATE`` serializes the short claim transaction so two GPU
+slots can never receive the same job.
 """
 
 from __future__ import annotations

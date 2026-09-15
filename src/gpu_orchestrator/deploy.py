@@ -1,6 +1,6 @@
 """Operator-initiated provider worker deployment with a durable ledger.
 
-Autonomous create/destroy remains deliberately disabled (see AGENTS.md).
+Autonomous create/destroy remains deliberately disabled.
 This service powers explicit, human-confirmed deployments from the workbench:
 one pool policy + one provider + a bounded worker count, executed through the
 existing provider drivers, recorded in the ``deployments`` ledger, and torn

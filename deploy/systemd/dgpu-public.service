@@ -1,6 +1,6 @@
 [Unit]
 Description=Distributed GPU public authenticated API backend
-Documentation=file:///opt/dgpu/docs/provider-workers.md
+Documentation=file:///opt/dgpu/README.md
 Wants=network-online.target
 After=network-online.target
 
@@ -22,7 +22,7 @@ BindReadOnlyPaths=/opt/dgpu/dist:/srv/dgpu-public/dist
 # The bind contains live state, but filesystem modes expose only control.sqlite3
 # and artifacts to group dgpu; historical test state remains owner-only.
 BindPaths=/opt/dgpu/state:/srv/dgpu-public/state
-InaccessiblePaths=/home /opt/legacy /etc/dgpu
+InaccessiblePaths=/home /etc/dgpu
 ExecStart=/usr/bin/env /srv/dgpu-public/.venv/bin/python \
   /srv/dgpu-public/.venv/bin/dgpu serve \
   --db /srv/dgpu-public/state/control.sqlite3 \

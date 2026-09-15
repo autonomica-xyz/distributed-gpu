@@ -325,7 +325,7 @@ def test_teardown_refuses_active_jobs_then_verifies_absence_before_retiring_toke
     )
 
     # provider still lists the resource -> destroy verification fails and the
-    # credential must NOT be retired (AGENTS.md teardown ordering)
+    # credential must NOT be retired until provider inventory is absent
     driver.still_visible_after_destroy = True
     from gpu_orchestrator.providers.base import ProviderError
 

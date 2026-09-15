@@ -16,7 +16,8 @@ build/
 logs*.csv
 /state/
 /outputs/
-/docs/historical/
+/docs/
 /config/private.env
 /config/*.private.*
 /config/secrets/
+AGENTS.md

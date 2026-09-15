@@ -5,9 +5,6 @@ across local and rented GPU workers. A host registers one independently
 schedulable slot per GPU, so a four-GPU machine can execute four unrelated jobs
 at once.
 
-This repository generalizes the operational patterns in a prior internal system;
-it does not modify or import the live legacy-system checkout.
-
 ## What exists now
 
 - versioned workload YAML and JSON Schema admission;
@@ -86,7 +83,7 @@ The operator workbench is served at `http://127.0.0.1:8088/dashboard`. Open it
 and sign in with any client/admin/controller token (for example the
 `$CLIENT_TOKEN` issued below). Disable it with `--no-dashboard` or
 `DGPU_DASHBOARD=0`. To expose it to your tailnet over HTTPS with no code
-change, see [Access over Tailscale](docs/dashboard.md#access-over-tailscale).
+change, put `tailscale serve` in front of `http://127.0.0.1:8088`.
 
 Submit two independent jobs in another terminal:
 
@@ -129,9 +126,9 @@ DGPU_TOKEN="$AGENT_TOKEN" .venv/bin/dgpu agent \
 
 Provider machines are outside the tailnet and reach the API through
 `https://gpu-control.example.com`, while the dashboard remains tailnet-only.
-The reverse proxy terminates TLS and forwards to a separate API-only listener;
-see [Provider worker access](docs/provider-workers.md) for the split-ingress
-contract, strict pre-rental verification, and exact worker bootstrap. The
+The reverse proxy terminates TLS and forwards to a separate API-only listener
+(`--no-dashboard`, no `DGPU_PUBLIC_URL`). Verify that public ingress before
+renting capacity. The
 workbench's Admin tab can deploy Vast/Salad workers per pool policy — Salad
 shows live GPU-class/priority availability and hourly/daily/monthly estimates,
 then requires the selected trusted offer in the confirmation flow. Provider
@@ -176,30 +173,6 @@ instance.
 - `tests/`: race, fencing, placement, API, artifacts, economics, and provider
   contract tests.
 
-## Design notes
-
-- [The legacy system study](docs/internal/legacy-system-study.md) records how the original system is run, what
-  is reusable, and where it is transcription-coupled.
-- [Architecture](docs/architecture.md) describes the standalone queue,
-  artifact, worker, security, and provider boundaries.
-- [Workload ideas](docs/workload-ideas.md) compares image generation, batch
-  Qwen inference, upscaling, OCR, embeddings, video, training, and other fits.
-- [Docker GPU workers](docs/docker-workers.md) provides copy/paste build,
-  scoped-token, run, and teardown commands; the [Worker E2E](docs/worker-docker-e2e.md)
-  records a real registered RTX A5000 job and verified artifact.
-- [Generic translation batching](docs/translation-batching.md) defines the
-  producer/worker boundary and distinguishes orchestration amortization from
-  true CTranslate2 token batching.
-- [Translation worker image](docs/argos-translation-image.md) records the
-  pinned model/runtime, offline and queue tests, and the remaining GPU gate.
-- [Translation model shards](docs/translation-model-shards.md) defines the
-  popular-language image groups and long-tail routing strategy.
-- [Translation shard verification](docs/translation-shards-e2e.md) records all
-  22 offline CUDA route tests and the two-shard placement/artifact proof.
-- [Roadmap](docs/roadmap.md) separates the implemented foundation from the
-  input artifact plane, production workload packs, and audited cloud apply
-  loop.
-
 The initial scheduler deliberately supports one GPU per independent job.
 Coordinated multi-GPU jobs require a separate gang-scheduling extension and do
 not complicate this primary use case.
@@ -211,6 +184,8 @@ the release checklist. Security concerns should follow the process in
 [SECURITY.md](SECURITY.md).
 
 ## License
+
+Copyright (C) 2026 Aljaz Ceru
 
 This project is licensed under the GNU General Public License v3.0 or later
 (GPL-3.0-or-later). See [LICENSE](LICENSE) for the full text.
