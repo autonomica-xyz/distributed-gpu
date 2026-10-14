@@ -812,16 +812,23 @@ async function loadWorkloads() {
 function renderWorkloadsTab() {
   if (!state.workloads.length) { $("#main").innerHTML = `<section><h2>Workloads</h2><p class="empty">loading…</p></section>`; loadWorkloads().then(renderWorkloadsTab); return; }
   const cards = state.workloads.map(w => {
-    const routes = Object.entries(w.routes||{}).map(([name,r]) => `<div class="card" style="margin-top:8px">
+    const routeCard = ([name,r]) => `<div class="card" style="margin-top:8px">
         <div style="display:flex;justify-content:space-between;align-items:center"><b>${esc(name)}</b>${name===w.default_route?'<span class="pill ok">default</span>':''}</div>
         <div class="sub mono">${esc(r.cost?.unit||"?")} · ${r.cost?.default_units_per_gpu_hour||"?"} units/GPUh · scale ${r.scaling?.min_slots||0}–${r.scaling?.max_slots||"?"}</div>
         <div class="sub">executor: <span class="mono">${esc(r.executor?.type)}</span> · capability <span class="mono">${esc(r.compatibility?.capability)}</span></div>
-      </div>`).join("");
+      </div>`;
+    const allRoutes = Object.entries(w.routes||{});
+    allRoutes.sort((a,b) => (a[0]===w.default_route?-1:0)-(b[0]===w.default_route?-1:0));
+    const INLINE_ROUTES = 4;
+    const routes = allRoutes.slice(0, INLINE_ROUTES).map(routeCard).join("") +
+      (allRoutes.length > INLINE_ROUTES
+        ? `<details style="margin-top:10px"><summary><span class="sub">${allRoutes.length-INLINE_ROUTES} more routes</span></summary>${allRoutes.slice(INLINE_ROUTES).map(routeCard).join("")}</details>`
+        : "");
     const props = w.payload_schema?.properties||{};
     const fields = Object.keys(props);
     return `<div class="card">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
-        <div><h2 style="margin:0">${esc(w.name)} <span class="muted">v${esc(w.version)}</span></h2>
+        <div><h2 style="margin:0">${esc(w.name)} <span class="muted">v${esc(w.version)} · ${allRoutes.length} route${allRoutes.length===1?"":"s"}</span></h2>
         <div class="sub">${esc(w.description||"")}</div></div>
         <button class="btn" data-submit="${esc(w.name)}"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Submit</button>
       </div>
