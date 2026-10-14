@@ -1165,6 +1165,19 @@ class Store:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def pending_counts(self) -> dict[tuple[str, str], int]:
+        """Pending job count per (workload, route) — the queue-depth signal."""
+        with self._connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT workload, route, COUNT(*) AS pending
+                  FROM jobs
+                 WHERE state = 'pending' AND cancel_requested = 0
+                 GROUP BY workload, route
+                """
+            ).fetchall()
+        return {(row["workload"], row["route"]): int(row["pending"]) for row in rows}
+
     def queue_stats(
         self, *, project_id: str | None = None, window_hours: int = 24
     ) -> list[dict[str, Any]]:

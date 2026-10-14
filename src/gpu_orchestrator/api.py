@@ -249,6 +249,14 @@ def create_app(
         if principal["role"] != "admin" and principal["subject"] != agent_id:
             raise HTTPException(status_code=403, detail="token is not scoped to this agent")
 
+    def has_perm(principal: dict[str, Any], perm: str) -> bool:
+        """Named permissions via `scopes.perms` (e.g. --scope perms=dynamic).
+        Admin tokens hold every permission implicitly."""
+        if principal["role"] == "admin":
+            return True
+        perms = set(principal.get("scopes", {}).get("perms") or [])
+        return "*" in perms or perm in perms
+
     def require_slot(principal: dict[str, Any], slot_id: str) -> None:
         slot = orchestrator.store.get_slot(slot_id)
         require_agent(principal, slot["agent_id"])
@@ -281,11 +289,21 @@ def create_app(
         return FileResponse(path, media_type="application/octet-stream", filename=filename)
 
     @app.get("/v1/workloads")
-    def workloads(_: dict[str, Any] = Depends(any_principal)) -> list[dict[str, Any]]:
-        return [
-            orchestrator.registry.get(name).model_dump(mode="json")
-            for name in orchestrator.registry.names()
-        ]
+    def workloads(principal: dict[str, Any] = Depends(any_principal)) -> list[dict[str, Any]]:
+        # Queue depths are opt-in per token: only `perms=dynamic` (or admin)
+        # principals learn how full each route is. Everyone else sees the
+        # same route definitions as before, with no pending counts.
+        depths = (
+            orchestrator.store.pending_counts() if has_perm(principal, "dynamic") else None
+        )
+        documents = []
+        for name in orchestrator.registry.names():
+            document = orchestrator.registry.get(name).model_dump(mode="json")
+            if depths is not None:
+                for route_id, route in (document.get("routes") or {}).items():
+                    route["pending_jobs"] = depths.get((name, route_id), 0)
+            documents.append(document)
+        return documents
 
     @app.post("/v1/jobs", status_code=status.HTTP_201_CREATED)
     def submit_job(

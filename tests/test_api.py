@@ -276,3 +276,48 @@ def test_optional_public_bootstrap_serves_only_wheels(orchestrator, tmp_path):
     assert served.status_code == 200
     assert served.content == b"wheel-content"
     assert api.get("/bootstrap/secret.txt").status_code == 404
+
+
+def test_workload_depths_require_dynamic_permission(orchestrator, store):
+    client_token = store.issue_token(role="client", subject="project-a")
+    plain_agent = store.issue_token(role="agent", subject="agent-a")
+    dynamic_agent = store.issue_token(
+        role="agent", subject="agent-a", scopes={"perms": ["dynamic"]}
+    )
+    api = TestClient(create_app(orchestrator))
+
+    from conftest import register_agent
+
+    register_agent(store, "agent-a")
+
+    submitted = api.post(
+        "/v1/jobs",
+        headers={**bearer(client_token), "Idempotency-Key": "depth-test"},
+        json={
+            "project_id": "project-a",
+            "workload": "demo-gpu",
+            "payload": {"message": "hello"},
+        },
+    )
+    assert submitted.status_code == 201, submitted.text
+
+    def routes_for(token) -> dict:
+        document = next(
+            item
+            for item in api.get("/v1/workloads", headers=bearer(token)).json()
+            if item["name"] == "demo-gpu"
+        )
+        return document["routes"]
+
+    # Plain agent tokens keep the historical shape: no pending counts at all.
+    assert "pending_jobs" not in routes_for(plain_agent)["command"]
+    # perms=dynamic tokens see per-route queue depth.
+    assert routes_for(dynamic_agent)["command"]["pending_jobs"] == 1
+    # Depths are real-time: draining the queue drops the count back to zero.
+    claimed = api.post(
+        "/v1/slots/agent-a-slot-0/claim",
+        headers=bearer(dynamic_agent),
+        json={"lease_seconds": 90},
+    )
+    assert claimed.status_code == 200 and claimed.json() is not None
+    assert routes_for(dynamic_agent)["command"]["pending_jobs"] == 0
