@@ -19,7 +19,9 @@ at once.
   bounded retry policy;
 - one concurrent executor loop per physical GPU;
 - trusted command, digest-pinned container, local HTTP, and plugin executors;
-- scoped client, agent, controller, and admin credentials;
+- scoped client, agent, controller, and admin credentials, with per-route
+  queue depth in `/v1/workloads` exposed only to tokens granted
+  `--scope perms=dynamic` (admins implicitly);
 - streamed, bounded, content-addressed output uploads with JSON, schema, image,
   and media validation;
 - workload-unit autoscaling and total-cost-to-drain candidate ranking;
