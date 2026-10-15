@@ -1,271 +1,184 @@
 # Distributed GPU
 
-A standalone control plane for distributing independent asynchronous jobs
-across local and rented GPU workers. A host registers one independently
-schedulable slot per GPU, so a four-GPU machine can execute four unrelated jobs
-at once.
+Distributed GPU is an open-source, self-hosted job control plane for running
+background compute across your own machines and rented GPU workers.
+Submit work once, match it to compatible capacity, and collect validated
+results through an API or web workbench.
 
-## What exists now
+Use it for independent inference and batch-processing jobs, such as image
+generation, transcription, translation, and prompt batches. Each physical GPU
+is one schedulable slot: four GPUs can run four unrelated jobs. It is not a
+multi-GPU model-training or model-sharding framework.
 
-- versioned workload YAML and JSON Schema admission;
-- an operator **workbench** (web dashboard) for clients to watch the fleet,
-  inspect jobs, and submit schema-bounded work, served at `/dashboard`;
-- durable SQLite jobs, attempts, events, priorities, and project-scoped
-  idempotency;
-- atomic claims matched on VRAM, compute capability, GPU model, provider,
-  labels, capabilities, and installed model packs;
-- `pending -> leased -> running -> succeeded/dead-letter/cancelled` lifecycle;
-- expiring per-claim secrets, heartbeat recovery, cancellation, and centrally
-  bounded retry policy;
-- one concurrent executor loop per physical GPU;
-- trusted command, digest-pinned container, local HTTP, and plugin executors;
-- scoped client, agent, controller, and admin credentials, with per-route
-  queue depth in `/v1/workloads` exposed only to tokens granted
-  `--scope perms=dynamic` (admins implicitly);
-- streamed, bounded, content-addressed output uploads with JSON, schema, image,
-  and media validation, plus private client input uploads that agents fetch
-  only while holding a lease on a job that references them;
-- workload-unit autoscaling and total-cost-to-drain candidate ranking;
-- local capacity plus Vast and Salad provider-driver boundaries;
-- a read-only, credit-gated multi-provider fleet planner;
-- executable demo, fixed SDXL Diffusers, offline English-to-Spanish batch
-  translation, two-route GPU transcription, and vLLM-backed Qwen batch
-  routes, all loading weights only from hash-verified model packs.
+![Operator workbench](assets/screenshots/controller-dashboard.png)
 
-The narrow `scripts/salad_sdxl.py` helper can create and authoritatively destroy
-one explicit Salad test worker; unattended autoscaler apply remains disabled
-until there is a durable resource/cost ledger and full reconciliation audit.
+*The workbench in a local example deployment with two CPU slots, showing
+completed jobs, running work, and the remaining backlog.*
 
-The fixed model routes intentionally do not take model code from a job.
-The SDXL route in particular does not use ComfyUI. Jobs may choose only
-schema-bounded fields (prompt, seed, dimensions, steps, language,
-diarization bounds, sampling knobs, an uploaded audio input); the
-route pins the model id, immutable revision, executor handler, and endpoint.
+The companion worker package is
+[distributed-worker](https://github.com/autonomica-xyz/distributed-worker)
+(`dworker`, MIT-licensed): a CLI plus loopback dashboard that inventories
+NVIDIA, AMD, or spare-CPU capacity on a host, advertises selected
+capabilities, optionally gates claiming on confirmed machine idle, and runs
+the executors defined here. This repository also ships a minimal `dgpu agent`
+loop for headless and pool-deployed workers. Use `dworker` for workstation
+controls, idle-aware execution, and a host-local dashboard.
 
-## Model packs and worker runtime profiles
+## Features
 
-Weights are never fetched at job time. Operators provision each pack with
-`gpu_orchestrator_workloads.model_packs.install_hf_pack(lock, target)`
-(requires the optional `models` extra, `huggingface-hub`), which downloads
-the pinned Hugging Face snapshot and verifies every file against the repo's
-own LFS/blob digests; executors then re-run `verify_hf_pack` on the pack's
-`manifest.json` before weights load, so verification at load time is pure
-local I/O with no token. Pinned locks live in `models/`:
+- **Durable queue** — SQLite-backed jobs, attempts, and events; project-scoped
+  idempotency keys; priorities; centrally bounded retries; heartbeat lease
+  recovery; cancellation.
+- **Precise placement** — atomic claims matched on VRAM, compute capability,
+  GPU model, provider, labels, advertised capabilities, and installed model
+  packs. One executor loop per physical GPU.
+- **Scoped credentials** — role-scoped (`admin`, `client`, `agent`,
+  `controller`) tokens with per-route `--scope routes=<workload>` grants,
+  expiry, and revocation.
+- **Private inputs, validated outputs** — clients upload project-scoped input
+  blobs that an agent may fetch only while holding a lease on a job that
+  references them; outputs are streamed, bounded, content-addressed, and
+  validated against the route's artifact spec.
+- **Operator workbench** — a web dashboard at `/dashboard` to watch the fleet,
+  inspect and submit jobs, issue tokens, and run provider deploys.
+- **Fleet planning** — workload-unit autoscaling math and a read-only
+  multi-provider planner (`dgpu plan`); operator-confirmed Vast/Salad deploys
+  through pool policy files.
 
-- `sdxl.lock.json`: `sdxl-base-1.0-fp16-76d28af` —
-  `stabilityai/stable-diffusion-xl-base-1.0@76d28af…`, fp16 safetensors
-  only, no gate (OpenRAIL++ license);
-- `qwen.lock.json`: `qwen3.5-9b-awq-156edc4` —
-  `cyankiwi/Qwen3.5-9B-AWQ-4bit@156edc4…`, compressed-tensors W4, no gate
-  (Apache-2.0);
-- `transcription.lock.json`: four packs —
-  `nvidia/parakeet-tdt-0.6b-v3@541d1f9…` (CC-BY-4.0),
-  `Systran/faster-whisper-large-v3@edaa852…` (MIT),
-  `facebook/wav2vec2-base-960h@22aad52…` (Apache-2.0), and
-  `pyannote/speaker-diarization-community-1@3533c8c…`. The diarization pack
-  is gated (HF contact-details form, CC-BY-4.0 attribution required), so a
-  fresh cold install needs an approved HF token at provisioning time; the
-  token is used only then and never appears in job payloads.
+## Workload catalog
 
-Install packs under the route's `*_MODEL_DIR` paths (conventionally
-`/models/<pack>`), owned by the worker user and kept read-only at job time.
-The installer never overwrites content it cannot prove is one of its own
-pack dirs, and a symlink anywhere in the traversal refuses the operation.
+`dgpu serve` loads route YAML from `DGPU_WORKLOADS` (default `workloads/`);
+`dgpu validate` lists what it parsed, and `GET /v1/workloads` serves the live
+catalog. Bundled routes:
 
-ML runtimes are deliberately separate profiles, not controller
-dependencies: root development installs only `-e '.[dev]'` (which includes
-`huggingface-hub` for pack provisioning), while `'.[models]'` is the
-production install for pack tooling alone. The transcription worker image
-installs `deploy/transcription/requirements.txt` (Python 3.12, torch 2.8,
-NeMo, WhisperX, pyannote) plus ffmpeg/ffprobe binaries and baked-in NLTK
-`punkt_tab` English data — workers run egress-off and must never call
-`nltk.download` at job time. The Qwen worker runs the isolated vLLM stack
-in `deploy/llm/requirements.txt` (vLLM 0.20.1, torch 2.11, transformers
-5.14.1). For `llm-batch` the operator pre-provisions the verified pack and
-starts one fixed loopback server (`VLLM_SERVER_DEV_MODE=1`,
-`--enable-sleep-mode`, `--host 127.0.0.1`); the plugin then issues only
-bounded requests — `/tokenize`, one true batched `/v1/completions`, and
-`/sleep`/`/wake_up` for VRAM handoff — and never arbitrary payload-chosen
-models or endpoints.
+| Workload | Backend | Purpose |
+| --- | --- | --- |
+| [image-generate](workloads/image-generate.yaml) | SDXL / Diffusers | Generate PNG images from bounded prompts and settings |
+| [llm-batch](workloads/llm-batch.yaml) | Qwen3.5 9B W4 / vLLM | Process ordered batches of text prompts |
+| [transcribe](workloads/transcribe.yaml) | Parakeet or WhisperX | Speech recognition, timestamps, English alignment, optional speaker diarization |
+| [translate-batch](workloads/translate-batch.yaml) | Argos / CTranslate2 | GPU text translation using reviewed language packs |
+| [translate-segment](workloads/translate-segment.yaml) and [translate-text-batch](workloads/translate-text-batch.yaml) | LibreTranslate | Single-segment and batched translation through a local service |
 
-## Job inputs
+Routes define the trusted executor, immutable model identity, hardware
+requirements, input schema, and output validation. Jobs supply data, not
+arbitrary executors, checkpoints, or service endpoints. Add your own routes
+for trusted command, container, HTTP, or plugin workloads, including CPU work.
 
-Clients upload private, project-scoped blobs with
-`POST /v1/projects/{project}/inputs?workload=<name>&name=<input>`; the
-controller validates the blob against the workload's declared input spec
-(media type, `max_bytes`, validator) and returns a content-addressed
-`/v1/projects/{project}/inputs/{sha256}` URI. A job references inputs only
-by these URIs. The agent downloads each declared input under its active
-lease — the controller authorizes the download only when the leased job's
-inputs reference that exact blob — verifies size and SHA-256, and
-materializes the file under `workdir/inputs/` before the executor runs.
-External, `file://`, or off-origin URIs are refused, so an input can never
-smuggle the bearer token or read worker-local files.
+Models and ML runtimes are separate from the controller installation.
+Provision verified packs before execution; Hugging Face provisioning checks
+the pinned snapshot's LFS/blob identities and writes per-file SHA-256
+manifests for offline verification at load time. See [model locks](models/),
+the [workload guide](workloads/README.md), and the [transcription](deploy/transcription/requirements.txt)
+and [vLLM](deploy/llm/requirements.txt) runtime profiles. Bundled ML routes
+target NVIDIA hardware. Model licenses apply separately; a fresh pyannote
+diarization-pack download requires approved Hugging Face access.
 
-## Workload catalog and dynamic inventory
+## Install
 
-`dgpu serve` loads declarative route YAML from `DGPU_WORKLOADS`
-(default `workloads/`). `GET /v1/workloads` returns the live catalog;
-per-route queue depth is exposed only to tokens granted
-`--scope perms=dynamic` (and admins). Tokens are further scoped by role and
-`--scope routes=<workload>` so an agent credential reaches only the routes
-it serves. Model servers stay private: worker-local HTTP endpoints bind to
-`127.0.0.1` and never leave the worker host.
-
-## Install and verify
-
-Python 3.10 or newer is required.
+Python 3.10 or newer is required. Install from these repositories or a
+locally built wheel:
 
 ```bash
+git clone https://github.com/autonomica-xyz/distributed-gpu.git
+cd distributed-gpu
 python3 -m venv .venv
-.venv/bin/pip install -e '.[dev]'
+.venv/bin/pip install .
 .venv/bin/dgpu validate
-.venv/bin/pytest
 ```
 
-`ffprobe` is additionally required when a workload uses the `media_probe`
-artifact validator. A real NVIDIA agent discovers its slots with `nvidia-smi`.
+Install `'.[models]'` when this environment also needs model-pack provisioning
+tools. GPU libraries and model weights are not installed on the controller.
+Workers need the route-specific runtime; `ffprobe` is required for
+`media_probe` validation.
 
-## Local two-worker smoke test
-
-The included demo proves scheduling, leases, execution, upload validation, and
-artifact attachment without requiring a GPU. It uses the no-GPU `demo-gpu`
-workload, which lives in the test fixtures (`tests/fixtures/workloads`) and is
-intentionally kept out of the operational `workloads/` directory. Start from a
-clean local state:
+## Run the controller
 
 ```bash
+umask 077
 mkdir -p state
-export CLIENT_TOKEN="$(.venv/bin/dgpu token \
-  --role client --subject demo-project)"
-export AGENT_TOKEN="$(.venv/bin/dgpu token \
-  --role agent --subject demo-host --scope routes=demo-gpu)"
+.venv/bin/dgpu token --role admin --subject operator \
+  --expires-hours 24 > state/operator.token
+.venv/bin/dgpu token --role client --subject example-project \
+  --expires-hours 24 > state/client.token
+.venv/bin/dgpu serve --host 127.0.0.1 --port 8088
 ```
 
-Run the control plane in one terminal (pointing it at the fixture workloads so
-the `demo-gpu` route is available):
+State lives in `./state/` (`DGPU_DB`, `DGPU_ARTIFACTS`). Open
+`http://127.0.0.1:8088/dashboard` and paste the contents of
+`state/operator.token` into the sign-in form. Keep token files private.
+Disable the workbench with `--no-dashboard` or `DGPU_DASHBOARD=0`.
+
+From another terminal in the controller checkout, issue an agent token for
+the worker and workloads you want it to serve:
 
 ```bash
-DGPU_WORKLOADS=tests/fixtures/workloads \
-  .venv/bin/dgpu serve --host 127.0.0.1 --port 8088
+umask 077
+.venv/bin/dgpu token --role agent --subject image-worker \
+  --scope routes=image-generate --expires-hours 24 > state/worker.token
 ```
 
-The operator workbench is served at `http://127.0.0.1:8088/dashboard`. Open it
-and sign in with any client/admin/controller token (for example the
-`$CLIENT_TOKEN` issued below). Disable it with `--no-dashboard` or
-`DGPU_DASHBOARD=0`. To expose it to your tailnet over HTTPS with no code
-change, put `tailscale serve` in front of `http://127.0.0.1:8088`.
+Repeat `--scope` per route — do not comma-join values. An agent token may
+only register slots and claim work for its subject and routes; never hand a
+worker an admin or client token.
 
-Submit two independent jobs in another terminal:
+## Submit a job
+
+With the controller running, submit through the authenticated API:
 
 ```bash
-for n in 1 2; do
-  curl --fail-with-body http://127.0.0.1:8088/v1/jobs \
-    -H "Authorization: Bearer $CLIENT_TOKEN" \
-    -H 'Content-Type: application/json' \
-    -H "Idempotency-Key: demo-$n" \
-    --data "{\"project_id\":\"demo-project\",\"workload\":\"demo-gpu\",\"payload\":{\"message\":\"job $n\"}}"
-done
+CLIENT_TOKEN="$(cat state/client.token)"
+curl --fail-with-body http://127.0.0.1:8088/v1/jobs \
+  -H "Authorization: Bearer $CLIENT_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: image-example-1' \
+  --data '{"project_id":"example-project","workload":"image-generate","payload":{"prompt":"A red ceramic mug on a white table","seed":42}}'
 ```
 
-Then register two fake slots and process the queue:
+The response includes a job ID. It remains queued until a compatible worker
+with the required runtime and model pack is available. Follow it in the
+workbench or with `GET /v1/jobs/{id}`; completed jobs reference downloadable
+output artifacts. Workloads declaring file inputs use the project's private
+input-upload API before job submission.
 
-```bash
-export TOWER_TOKEN="$(.venv/bin/dgpu token \
-  --role agent --subject tower-a --scope routes=demo-gpu)"
-DGPU_TOKEN="$TOWER_TOKEN" .venv/bin/dgpu agent \
-  --endpoint http://127.0.0.1:8088 \
-  --agent-id demo-host \
-  --capability demo-gpu \
-  --fake-gpus 2 \
-  --once
-```
+## Connecting real workers
 
-For a real local host, omit `--fake-gpus`; each GPU reported by `nvidia-smi`
-becomes a separate slot. Advertise only capabilities and model packs actually
-installed on that host.
+On each GPU host, install the
+[distributed-worker](https://github.com/autonomica-xyz/distributed-worker)
+package (which depends on this one) and run `dworker login` with the
+controller endpoint and a route-scoped agent token, then `dworker doctor` to
+see which routes the machine matches. A host must already satisfy a route's
+prerequisites — the executor/plugin installed, verified model packs on disk,
+and any operator-started local model server warm — before advertising its
+capability. Model endpoints such as LibreTranslate or vLLM bind to
+`127.0.0.1` on the worker and never leave the host.
 
-```bash
-DGPU_TOKEN="$AGENT_TOKEN" .venv/bin/dgpu agent \
-  --endpoint https://gpu-control.example.com \
-  --agent-id tower-a \
-  --provider local \
-  --capability demo-gpu
-```
+## Production and provider boundaries
 
-## Provider planning
-
-Provider machines are outside the tailnet and reach the API through
-`https://gpu-control.example.com`, while the dashboard remains tailnet-only.
-The reverse proxy terminates TLS and forwards to a separate API-only listener
-(`--no-dashboard`, no `DGPU_PUBLIC_URL`). Verify that public ingress before
-renting capacity. The
-workbench's Admin tab can deploy Vast/Salad workers per pool policy — Salad
-shows live GPU-class/priority availability and hourly/daily/monthly estimates,
-then requires the selected trusted offer in the confirmation flow. Provider
-resources and DGPU agent heartbeats reconcile automatically in the private
-controller. Every deploy is operator-confirmed, ledgered, and torn down with verified provider
-absence before its credential is retired. Pool files pin the worker image,
-own an explicit set of slots, and set provider-specific price and credit
-policy. Planning is read-only:
-
-```bash
-.venv/bin/dgpu plan \
-  --pool pools/image-standard.example.yaml \
-  --vast-api-key-file /run/secrets/vast-api-key
-```
-
-The planner sums queued and running workload units, subtracts current pool
-slots, fails closed when required credit is unknown, searches eligible offers,
-and ranks them by startup-adjusted estimated drain cost. It never launches an
-instance.
-
-## Repository map
-
-- `src/gpu_orchestrator/store.py`: durable queue and placement kernel;
-- `src/gpu_orchestrator/dashboard.py` + `dashboard.html`: read-only operator
-  workbench (overview aggregation and the self-contained web UI);
-- `src/gpu_orchestrator/agent.py`: GPU discovery, slot loops, leases, and
-  executor boundary;
-- `src/gpu_orchestrator_workloads/sdxl.py`: fixed, cached SDXL Diffusers
-  executor;
-- `src/gpu_orchestrator_workloads/model_packs.py`: verified Hugging Face
-  pack install (`install_hf_pack`) and offline manifest verification
-  (`verify_hf_pack`);
-- `src/gpu_orchestrator_workloads/transcription.py`: parakeet and WhisperX
-  executors for the `transcribe` routes;
-- `src/gpu_orchestrator_workloads/qwen.py`: bounded adapter for a fixed
-  loopback vLLM server;
-- `src/gpu_orchestrator_workloads/argos_translate.py`: fixed, cached,
-  GPU-index-aware CTranslate2 translation executor;
-- `src/gpu_orchestrator/artifacts.py`: local content-addressed broker for
-  outputs and private job inputs;
-- `src/gpu_orchestrator/controller.py`: cross-provider dry-run fleet planning;
-- `src/gpu_orchestrator/providers/`: Vast and Salad lifecycle drivers;
-- `workloads/`: declarative workload and route examples;
-- `deploy/`: pinned worker definitions, reusable Docker images, ML runtime
-  requirement sets, and private/public systemd units;
-- `models/`: reviewed immutable pack locks consumed by `install_hf_pack`;
-- `scripts/verify_public_ingress.sh`: fail-closed TLS/API/wheel/dashboard
-  boundary verification before provider deployment;
-- `scripts/salad_sdxl.py`: explicit Salad SDXL create/status/destroy lifecycle;
-- `pools/`: provider-pool policy examples;
-- `tests/`: race, fencing, placement, API, artifacts, economics, and provider
-  contract tests.
-
-The initial scheduler deliberately supports one GPU per independent job.
-Coordinated multi-GPU jobs require a separate gang-scheduling extension and do
-not complicate this primary use case.
+- **Split ingress.** Keep the dashboard and provider-keyed deploy API on a
+  private listener. For public workers, put a TLS-terminating reverse proxy
+  in front of a second `dgpu serve --no-dashboard` process with no
+  `DGPU_PUBLIC_URL`, and verify the boundary with
+  `scripts/verify_public_ingress.sh` before renting capacity.
+- **Provider keys stay on the controller.** A worker receives only the public
+  controller URL, an optional wheel URL, a fixed identity, and a short-lived
+  route-scoped agent token — never Vast/Salad credentials.
+- **Deploys are operator actions.** `dgpu plan` is read-only; the workbench's
+  provider deploys require explicit confirmation. Unattended autoscaler apply
+  exists but is off unless `DGPU_AUTONOMOUS_APPLY` is deliberately set.
+  Lease or token expiry does not stop provider billing; destroy rented
+  resources explicitly when they are no longer needed.
+- **No job-selected code.** Executors, images, and models come from routes
+  and pool files, not payloads. Fixed local services are started by the
+  operator, not spawned by the worker.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, test commands, and
-the release checklist. Security concerns should follow the process in
+See [CONTRIBUTING.md](CONTRIBUTING.md); security reports follow
 [SECURITY.md](SECURITY.md).
 
 ## License
 
-Copyright (C) 2026 Aljaz Ceru
-
-This project is licensed under the GNU General Public License v3.0 or later
-(GPL-3.0-or-later). See [LICENSE](LICENSE) for the full text.
+Copyright (C) 2026 Aljaz Ceru. GPL-3.0-or-later — see [LICENSE](LICENSE).
+The companion `dworker` package is MIT-licensed but depends on this
+GPL-licensed package, which is distributed separately and retains its
+license.
