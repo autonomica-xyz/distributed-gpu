@@ -1,0 +1,44 @@
+1
+00:00:00,000 --> 00:00:05,000
+DISTRIBUTED GPU
+A self-hosted control plane for GPU jobs
+
+2
+00:00:05,000 --> 00:00:13,000
+The workbench shows the live fleet:
+registered workers, slots, and the durable queue
+
+3
+00:00:13,000 --> 00:00:19,500
+Submit a real job: image-generate,
+with prompt and settings, from the workbench
+
+4
+00:00:19,500 --> 00:00:26,000
+The controller matches it on VRAM, GPU model,
+advertised capabilities, and model packs
+
+5
+00:00:26,000 --> 00:00:34,000
+An eligible worker claims it under a lease
+and runs the route's trusted executor
+
+6
+00:00:34,000 --> 00:00:42,000
+Follow the job's state and attempt history,
+and see which worker is executing it
+
+7
+00:00:42,000 --> 00:00:48,000
+The PNG result is content-addressed and
+validated against the route's artifact spec
+
+8
+00:00:48,000 --> 00:00:54,000
+Real local demo: one NVIDIA worker.
+ML runtime and weights provisioned separately
+
+9
+00:00:54,000 --> 00:01:00,000
+Open source · GPL-3.0-or-later
+github.com/autonomica-xyz/distributed-gpu

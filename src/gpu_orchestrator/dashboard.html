@@ -197,6 +197,7 @@
   .dialog {
     background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg); padding: 26px; width: 420px; max-width: 92vw;
+    max-height: calc(100vh - 48px); overflow-y: auto;
     animation: pop .24s cubic-bezier(.32,.72,0,1);
   }
   .dialog h3 { margin-bottom: 4px; }

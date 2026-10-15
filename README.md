@@ -24,6 +24,17 @@ the executors defined here. This repository also ships a minimal `dgpu agent`
 loop for headless and pool-deployed workers. Use `dworker` for workstation
 controls, idle-aware execution, and a host-local dashboard.
 
+## Videos
+
+| Demo | Duration |
+| --- | --- |
+| [Controller: queue to delivered image](assets/videos/controller-demo.mp4) | 60 seconds |
+| [Distributed GPU + dworker overview](assets/videos/overview.mp4) | 45 seconds |
+
+Captioned recordings show real dashboards and SDXL jobs on one NVIDIA worker,
+edited for length—not a latency benchmark. Runtime and model weights are
+provisioned separately. [Posters, subtitles, and sharing guide](assets/videos/README.md).
+
 ## Features
 
 - **Durable queue** — SQLite-backed jobs, attempts, and events; project-scoped

@@ -1,0 +1,39 @@
+1
+00:00:00,000 --> 00:00:05,000
+A GPU sitting idle?
+Put it to work — on your own terms
+
+2
+00:00:05,000 --> 00:00:11,000
+Distributed GPU is a self-hosted control plane:
+submit a job, it lands in a durable queue
+
+3
+00:00:11,000 --> 00:00:17,000
+Placement is precise — matched on VRAM,
+GPU model, capabilities, and model packs
+
+4
+00:00:17,000 --> 00:00:23,000
+dworker inventories a machine's GPU
+and advertises only the routes you select
+
+5
+00:00:23,000 --> 00:00:29,000
+Pause new claims whenever you like, or gate
+claiming on the machine being confirmed idle
+
+6
+00:00:29,000 --> 00:00:35,000
+An image-generate job runs on one NVIDIA
+worker — a real local deployment
+
+7
+00:00:35,000 --> 00:00:39,000
+The validated PNG result
+lands back in the workbench
+
+8
+00:00:39,000 --> 00:00:45,000
+Controller GPL-3.0-or-later · Worker MIT
+github.com/autonomica-xyz/distributed-gpu
