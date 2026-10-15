@@ -1,0 +1,31 @@
+# Transcription worker runtime (parakeet + whisperx routes).
+#
+# Runtime pins for Python 3.12 and CUDA. torch/torchaudio/torchvision must
+# stay on the 2.8/0.23 line required by whisperx 3.8.5;
+# nemo_toolkit[asr] 2.7.3 accepts them.
+# The image must additionally provide:
+#   - ffmpeg + ffprobe binaries (audio decode/probe, not pip-installable)
+#   - FFmpeg 4–7 shared libraries discoverable by torchcodec 0.7.0;
+#     an FFmpeg 8 CLI alone does not satisfy that binary ABI prerequisite
+#   - NLTK punkt_tab data on the nltk.data path (bake it in; workers run
+#     with egress off and must never call nltk.download)
+#   - provisioned model packs from models/transcription.lock.json
+# English punkt_tab asset:
+# https://raw.githubusercontent.com/nltk/nltk_data/550b6625bcef1f2abff2ff770a5a0d272c9c6b2a/packages/tokenizers/punkt_tab.zip
+# SHA-256 e57f64187974277726a3417ca6f181ec5403676c717672eef6a748a7b20e0106
+# Fail the image/bootstrap if this import fails:
+#   python -c 'from torchcodec.decoders import AudioDecoder'
+# A present Python package is not proof that its native libraries can load.
+
+nemo_toolkit[asr]==2.7.3
+whisperx==3.8.5
+faster-whisper==1.2.1
+ctranslate2==4.8.3
+pyannote-audio==4.0.7
+transformers==4.57.6
+huggingface-hub==0.36.2
+torch==2.8.0
+torchaudio==2.8.0
+torchvision==0.23.0
+torchcodec==0.7.0
+nltk==3.10.3

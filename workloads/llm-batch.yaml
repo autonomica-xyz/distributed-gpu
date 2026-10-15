@@ -1,7 +1,7 @@
 api_version: distributed-gpu.example/v1alpha1
 name: llm-batch
-version: "1"
-description: Contract scaffold for asynchronous prompt batches against a warm Qwen model server.
+version: "2"
+description: Ordered prompt batches against a warm loopback vLLM server pinned to a reviewed Qwen3.5-9B AWQ checkpoint.
 default_route: qwen35-9b-awq
 payload_schema:
   $schema: https://json-schema.org/draft/2020-12/schema
@@ -14,9 +14,14 @@ payload_schema:
       minItems: 1
       maxItems: 64
       items: {type: string, minLength: 1, maxLength: 131072}
-    max_output_tokens: {type: integer, minimum: 1, maximum: 8192}
+    max_output_tokens: {type: integer, minimum: 1, maximum: 4096}
     temperature: {type: number, minimum: 0, maximum: 2, default: 0.7}
     top_p: {type: number, exclusiveMinimum: 0, maximum: 1, default: 0.8}
+    seed: {type: integer}
+    stop:
+      type: array
+      maxItems: 8
+      items: {type: string, minLength: 1, maxLength: 256}
 inputs: []
 outputs:
   - name: responses
@@ -27,7 +32,7 @@ routes:
   qwen35-9b-awq:
     compatibility:
       capability: llm-batch
-      model_packs: [qwen3.5-9b-awq]
+      model_packs: [qwen3.5-9b-awq-156edc4]
     resources:
       gpu_count: 1
       vendor: nvidia
@@ -42,7 +47,13 @@ routes:
       timeout_seconds: 1800
       environment:
         VLLM_BASE_URL: http://127.0.0.1:8000
-        VLLM_MODEL: Qwen/Qwen3.5-9B
+        VLLM_MODEL_PACK: qwen3.5-9b-awq-156edc4
+        VLLM_MODEL_ID: cyankiwi/Qwen3.5-9B-AWQ-4bit
+        VLLM_MODEL_REVISION: 156edc4bbeb8d1910ee7be9196bafaf1bc052156
+        VLLM_MODEL_DIR: /models/qwen3.5-9b-awq-156edc4
+        VLLM_SERVED_MODEL: qwen3.5-9b-awq-156edc4
+        VLLM_MAX_CONTEXT_TOKENS: "8192"
+        VLLM_MAX_OUTPUT_TOKENS: "4096"
     cost:
       unit: reserved_output_token
       default_units_per_job: 1024
@@ -61,3 +72,5 @@ retry:
     - provider_interrupted
     - model_server_unavailable
     - artifact_transport_failed
+    - gpu_oom
+    - model_load_failed

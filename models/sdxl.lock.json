@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "format": "huggingface",
+  "model_pack": "sdxl-base-1.0-fp16-76d28af",
+  "model_id": "stabilityai/stable-diffusion-xl-base-1.0",
+  "revision": "76d28af79639c28a79fa5c6c6468febd3490a37e",
+  "pipeline_class": "StableDiffusionXLPipeline",
+  "variant": "fp16",
+  "dtype": "float16",
+  "allow_patterns": [
+    "model_index.json",
+    "scheduler/scheduler_config.json",
+    "text_encoder/config.json",
+    "text_encoder/model.fp16.safetensors",
+    "text_encoder_2/config.json",
+    "text_encoder_2/model.fp16.safetensors",
+    "tokenizer/merges.txt",
+    "tokenizer/special_tokens_map.json",
+    "tokenizer/tokenizer_config.json",
+    "tokenizer/vocab.json",
+    "tokenizer_2/merges.txt",
+    "tokenizer_2/special_tokens_map.json",
+    "tokenizer_2/tokenizer_config.json",
+    "tokenizer_2/vocab.json",
+    "unet/config.json",
+    "unet/diffusion_pytorch_model.fp16.safetensors",
+    "vae/config.json",
+    "vae/diffusion_pytorch_model.fp16.safetensors"
+  ],
+  "known_file_sha256": {
+    "text_encoder/model.fp16.safetensors": "660c6f5b1abae9dc498ac2d21e1347d2abdb0cf6c0c0c8576cd796491d9a6cdd",
+    "text_encoder_2/model.fp16.safetensors": "ec310df2af79c318e24d20511b601a591ca8cd4f1fce1d8dff822a356bcdb1f4",
+    "unet/diffusion_pytorch_model.fp16.safetensors": "83e012a805b84c7ca28e5646747c90a243c65c8ba4f070e2d7ddc9d74661e139",
+    "vae/diffusion_pytorch_model.fp16.safetensors": "bcb60880a46b63dea58e9bc591abe15f8350bde47b405f9c38f4be70c6161e68"
+  },
+  "approx_bytes": 7800000000,
+  "license": "openrail++",
+  "notes": [
+    "fp16 safetensors only: skips ~23 GiB of fp32/flax/onnx/openvino duplicates.",
+    "No gate or token required; public repo. Diffusers load uses variant=fp16, torch_dtype=float16, use_safetensors=True, local_files_only.",
+    "Provenance PNG metadata records model id, revision, variant, seed, prompt, dimensions."
+  ]
+}

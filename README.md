@@ -23,25 +23,94 @@ at once.
   queue depth in `/v1/workloads` exposed only to tokens granted
   `--scope perms=dynamic` (admins implicitly);
 - streamed, bounded, content-addressed output uploads with JSON, schema, image,
-  and media validation;
+  and media validation, plus private client input uploads that agents fetch
+  only while holding a lease on a job that references them;
 - workload-unit autoscaling and total-cost-to-drain candidate ranking;
 - local capacity plus Vast and Salad provider-driver boundaries;
 - a read-only, credit-gated multi-provider fleet planner;
-- executable demo, fixed SDXL Diffusers, and offline English-to-Spanish batch
-  translation routes, plus transcription and Qwen batch contract definitions.
+- executable demo, fixed SDXL Diffusers, offline English-to-Spanish batch
+  translation, two-route GPU transcription, and vLLM-backed Qwen batch
+  routes, all loading weights only from hash-verified model packs.
 
-The queue, local agent, output broker, SDXL plugin, Argos-derived CTranslate2
-adapter, and dry-run fleet planner are runnable. The translation CPU image has
-passed offline and full queue smoke tests; its CUDA image has passed offline
-and full queue tests on an RTX A5000 Laptop GPU. Qwen and transcription remain
-workload-pack scaffolds. The
-narrow `scripts/salad_sdxl.py` helper can create and authoritatively destroy
+The narrow `scripts/salad_sdxl.py` helper can create and authoritatively destroy
 one explicit Salad test worker; unattended autoscaler apply remains disabled
 until there is a durable resource/cost ledger and full reconciliation audit.
 
-The fixed SDXL route intentionally does not use ComfyUI. Jobs may choose only
-bounded inference fields such as prompt, seed, dimensions, and steps; the
-trusted route fixes the model, revision, and executor code.
+The fixed model routes intentionally do not take model code from a job.
+The SDXL route in particular does not use ComfyUI. Jobs may choose only
+schema-bounded fields (prompt, seed, dimensions, steps, language,
+diarization bounds, sampling knobs, an uploaded audio input); the
+route pins the model id, immutable revision, executor handler, and endpoint.
+
+## Model packs and worker runtime profiles
+
+Weights are never fetched at job time. Operators provision each pack with
+`gpu_orchestrator_workloads.model_packs.install_hf_pack(lock, target)`
+(requires the optional `models` extra, `huggingface-hub`), which downloads
+the pinned Hugging Face snapshot and verifies every file against the repo's
+own LFS/blob digests; executors then re-run `verify_hf_pack` on the pack's
+`manifest.json` before weights load, so verification at load time is pure
+local I/O with no token. Pinned locks live in `models/`:
+
+- `sdxl.lock.json`: `sdxl-base-1.0-fp16-76d28af` —
+  `stabilityai/stable-diffusion-xl-base-1.0@76d28af…`, fp16 safetensors
+  only, no gate (OpenRAIL++ license);
+- `qwen.lock.json`: `qwen3.5-9b-awq-156edc4` —
+  `cyankiwi/Qwen3.5-9B-AWQ-4bit@156edc4…`, compressed-tensors W4, no gate
+  (Apache-2.0);
+- `transcription.lock.json`: four packs —
+  `nvidia/parakeet-tdt-0.6b-v3@541d1f9…` (CC-BY-4.0),
+  `Systran/faster-whisper-large-v3@edaa852…` (MIT),
+  `facebook/wav2vec2-base-960h@22aad52…` (Apache-2.0), and
+  `pyannote/speaker-diarization-community-1@3533c8c…`. The diarization pack
+  is gated (HF contact-details form, CC-BY-4.0 attribution required), so a
+  fresh cold install needs an approved HF token at provisioning time; the
+  token is used only then and never appears in job payloads.
+
+Install packs under the route's `*_MODEL_DIR` paths (conventionally
+`/models/<pack>`), owned by the worker user and kept read-only at job time.
+The installer never overwrites content it cannot prove is one of its own
+pack dirs, and a symlink anywhere in the traversal refuses the operation.
+
+ML runtimes are deliberately separate profiles, not controller
+dependencies: root development installs only `-e '.[dev]'` (which includes
+`huggingface-hub` for pack provisioning), while `'.[models]'` is the
+production install for pack tooling alone. The transcription worker image
+installs `deploy/transcription/requirements.txt` (Python 3.12, torch 2.8,
+NeMo, WhisperX, pyannote) plus ffmpeg/ffprobe binaries and baked-in NLTK
+`punkt_tab` English data — workers run egress-off and must never call
+`nltk.download` at job time. The Qwen worker runs the isolated vLLM stack
+in `deploy/llm/requirements.txt` (vLLM 0.20.1, torch 2.11, transformers
+5.14.1). For `llm-batch` the operator pre-provisions the verified pack and
+starts one fixed loopback server (`VLLM_SERVER_DEV_MODE=1`,
+`--enable-sleep-mode`, `--host 127.0.0.1`); the plugin then issues only
+bounded requests — `/tokenize`, one true batched `/v1/completions`, and
+`/sleep`/`/wake_up` for VRAM handoff — and never arbitrary payload-chosen
+models or endpoints.
+
+## Job inputs
+
+Clients upload private, project-scoped blobs with
+`POST /v1/projects/{project}/inputs?workload=<name>&name=<input>`; the
+controller validates the blob against the workload's declared input spec
+(media type, `max_bytes`, validator) and returns a content-addressed
+`/v1/projects/{project}/inputs/{sha256}` URI. A job references inputs only
+by these URIs. The agent downloads each declared input under its active
+lease — the controller authorizes the download only when the leased job's
+inputs reference that exact blob — verifies size and SHA-256, and
+materializes the file under `workdir/inputs/` before the executor runs.
+External, `file://`, or off-origin URIs are refused, so an input can never
+smuggle the bearer token or read worker-local files.
+
+## Workload catalog and dynamic inventory
+
+`dgpu serve` loads declarative route YAML from `DGPU_WORKLOADS`
+(default `workloads/`). `GET /v1/workloads` returns the live catalog;
+per-route queue depth is exposed only to tokens granted
+`--scope perms=dynamic` (and admins). Tokens are further scoped by role and
+`--scope routes=<workload>` so an agent credential reaches only the routes
+it serves. Model servers stay private: worker-local HTTP endpoints bind to
+`127.0.0.1` and never leave the worker host.
 
 ## Install and verify
 
@@ -160,14 +229,23 @@ instance.
   executor boundary;
 - `src/gpu_orchestrator_workloads/sdxl.py`: fixed, cached SDXL Diffusers
   executor;
+- `src/gpu_orchestrator_workloads/model_packs.py`: verified Hugging Face
+  pack install (`install_hf_pack`) and offline manifest verification
+  (`verify_hf_pack`);
+- `src/gpu_orchestrator_workloads/transcription.py`: parakeet and WhisperX
+  executors for the `transcribe` routes;
+- `src/gpu_orchestrator_workloads/qwen.py`: bounded adapter for a fixed
+  loopback vLLM server;
 - `src/gpu_orchestrator_workloads/argos_translate.py`: fixed, cached,
   GPU-index-aware CTranslate2 translation executor;
-- `src/gpu_orchestrator/artifacts.py`: local content-addressed output broker;
+- `src/gpu_orchestrator/artifacts.py`: local content-addressed broker for
+  outputs and private job inputs;
 - `src/gpu_orchestrator/controller.py`: cross-provider dry-run fleet planning;
 - `src/gpu_orchestrator/providers/`: Vast and Salad lifecycle drivers;
 - `workloads/`: declarative workload and route examples;
-- `deploy/`: pinned worker definitions, reusable Docker images, and
-  private/public systemd units;
+- `deploy/`: pinned worker definitions, reusable Docker images, ML runtime
+  requirement sets, and private/public systemd units;
+- `models/`: reviewed immutable pack locks consumed by `install_hf_pack`;
 - `scripts/verify_public_ingress.sh`: fail-closed TLS/API/wheel/dashboard
   boundary verification before provider deployment;
 - `scripts/salad_sdxl.py`: explicit Salad SDXL create/status/destroy lifecycle;

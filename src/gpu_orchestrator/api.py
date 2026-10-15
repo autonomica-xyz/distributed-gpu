@@ -245,6 +245,18 @@ def create_app(
         if routes and "*" not in routes and selected_route not in routes:
             raise HTTPException(status_code=403, detail="token is not scoped to this route")
 
+    def require_workload_scope(principal: dict[str, Any], workload: str) -> None:
+        """Workload-level scope check for project input uploads.
+
+        Uploads happen before route selection (a blob may feed any route of
+        the workload), so only the ``workloads`` scope applies here.
+        """
+        if principal["role"] == "admin":
+            return
+        workloads = set((principal.get("scopes") or {}).get("workloads") or [])
+        if workloads and "*" not in workloads and workload not in workloads:
+            raise HTTPException(status_code=403, detail="token is not scoped to this workload")
+
     def require_agent(principal: dict[str, Any], agent_id: str) -> None:
         if principal["role"] != "admin" and principal["subject"] != agent_id:
             raise HTTPException(status_code=403, detail="token is not scoped to this agent")
@@ -520,6 +532,117 @@ def create_app(
             path,
             media_type=artifact["media_type"],
             filename=f"{artifact['name']}-{sha256[:12]}",
+        )
+
+    @app.post("/v1/projects/{project_id}/inputs", status_code=status.HTTP_201_CREATED)
+    async def upload_input(
+        project_id: str,
+        request: Request,
+        workload: str,
+        name: str,
+        content_type: Annotated[str | None, Header(alias="Content-Type")] = None,
+        principal: dict[str, Any] = Depends(client_principal),
+    ) -> dict[str, Any]:
+        """Upload a private, project-scoped job input blob.
+
+        The blob is validated against the workload's declared input spec for
+        ``name`` (max_bytes, media_types, validator) and recorded as a durable
+        grant. Returned URIs are the only URI jobs may reference in
+        ``inputs``; there is no delete because blobs are immutable and
+        content-addressed.
+        """
+        if artifact_store is None:
+            raise HTTPException(status_code=503, detail="artifact store is not configured")
+        require_project(principal, project_id)
+        require_workload_scope(principal, workload)
+        spec = next(
+            (item for item in orchestrator.registry.get(workload).inputs if item.name == name),
+            None,
+        )
+        if spec is None:
+            raise HTTPException(status_code=422, detail="input is not declared by the workload")
+        media_type = (content_type or "application/octet-stream").split(";", 1)[0].strip()
+        allowed_types = set(spec.media_types or [])
+        if allowed_types and media_type not in allowed_types:
+            raise HTTPException(status_code=422, detail="input media type is not allowed")
+        try:
+            digest, size, _ = await artifact_store.ingest(
+                request.stream(),
+                max_bytes=int(spec.max_bytes),
+                validator=spec.validator,
+                json_schema=spec.json_schema,
+            )
+        except ArtifactError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        orchestrator.store.put_input(
+            project_id=project_id,
+            name=name,
+            sha256=digest,
+            size=size,
+            media_type=media_type,
+            workload=workload,
+            uploader=principal["subject"],
+        )
+        return {
+            "name": name,
+            "uri": f"/v1/projects/{project_id}/inputs/{digest}",
+            "sha256": digest,
+            "size": size,
+            "media_type": media_type,
+        }
+
+    @app.get("/v1/projects/{project_id}/inputs/{sha256}")
+    def download_input(
+        project_id: str,
+        sha256: str,
+        job_id: str | None = None,
+        slot_id: str | None = None,
+        lease_token: Annotated[str | None, Header(alias="X-DGPU-Lease-Token")] = None,
+        principal: dict[str, Any] = Depends(any_principal),
+    ) -> FileResponse:
+        """Serve an input blob to its owning project or the leased agent.
+
+        Clients download blobs their own project uploaded. Agents download
+        only while holding a live lease on a job whose declared inputs
+        reference this exact blob — the bearer alone never reaches other
+        projects' data.
+        """
+        if artifact_store is None:
+            raise HTTPException(status_code=503, detail="artifact store is not configured")
+        if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+            raise NotFoundError("input blob not found")
+        if principal["role"] == "agent":
+            if not (job_id and slot_id and lease_token):
+                raise HTTPException(
+                    status_code=403,
+                    detail="agent input download requires job_id, slot_id, and lease token",
+                )
+            require_slot(principal, slot_id)
+            job = orchestrator.store.verify_lease(job_id, slot_id, lease_token)
+            canonical_uri = f"/v1/projects/{project_id}/inputs/{sha256}"
+            if not any(
+                item.get("uri") == canonical_uri for item in job["inputs"]
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail="leased job does not reference this input blob",
+                )
+        elif principal["role"] in {"client", "admin"}:
+            require_project(principal, project_id)
+        else:
+            raise HTTPException(
+                status_code=403, detail="role is not allowed to download project inputs"
+            )
+        grant = orchestrator.store.get_input(project_id, sha256)
+        if grant is None:
+            raise NotFoundError("input blob not found")
+        path = artifact_store.path_for(sha256)
+        if not path.is_file():
+            raise NotFoundError("input content is missing")
+        return FileResponse(
+            path,
+            media_type=grant["media_type"],
+            filename=f"input-{sha256[:12]}",
         )
 
     @app.post("/v1/jobs/{job_id}/fail")

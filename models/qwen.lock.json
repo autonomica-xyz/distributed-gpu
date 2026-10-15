@@ -1,0 +1,28 @@
+{
+  "format": "huggingface",
+  "model_pack": "qwen3.5-9b-awq-156edc4",
+  "model_id": "cyankiwi/Qwen3.5-9B-AWQ-4bit",
+  "revision": "156edc4bbeb8d1910ee7be9196bafaf1bc052156",
+  "quantization": "awq",
+  "quantization_format": "compressed-tensors-pack-quantized-int4",
+  "served_vram_target_mb": 16384,
+  "base_model": "Qwen/Qwen3.5-9B",
+  "license": "apache-2.0",
+  "allow_patterns": [
+    "LICENSE",
+    "chat_template.jinja",
+    "config.json",
+    "generation_config.json",
+    "merges.txt",
+    "model-00001-of-00003.safetensors",
+    "model-00002-of-00003.safetensors",
+    "model-00003-of-00003.safetensors",
+    "model.safetensors.index.json",
+    "preprocessor_config.json",
+    "recipe.yaml",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "video_preprocessor_config.json",
+    "vocab.json"
+  ]
+}

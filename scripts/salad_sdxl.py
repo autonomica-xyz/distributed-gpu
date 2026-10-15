@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Create, inspect, and safely destroy one Salad SDXL worker group."""
 
-from __future__ import annotations
-
 import argparse
+import hashlib
 import json
+import re
 from pathlib import Path
+from urllib.parse import urlparse
+
 
 from gpu_orchestrator.models import ResourceRequirements
 from gpu_orchestrator.providers import (
@@ -22,6 +24,34 @@ def _provider(args: argparse.Namespace) -> SaladProvider:
     return SaladProvider(key, args.organization, args.project)
 
 
+def _wheel_source(args: argparse.Namespace) -> tuple[str, str]:
+    """Return ``(url, sha256)`` for the bootstrap wheel.
+
+    The URL must be http(s) with no userinfo or fragment — the worker
+    command appends ``#sha256=<digest>`` itself so pip verifies the wheel
+    it downloads. The digest comes from ``--wheel-sha256`` or by hashing
+    ``--wheel-file``.
+    """
+    url = str(args.wheel_url).strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("--wheel-url must be an http(s) URL")
+    if parsed.username or parsed.password:
+        raise ValueError("--wheel-url must not embed credentials")
+    if parsed.fragment:
+        raise ValueError("--wheel-url must not carry a fragment")
+    if args.wheel_sha256:
+        digest = args.wheel_sha256.strip().lower()
+    elif args.wheel_file:
+        digest = hashlib.sha256(Path(args.wheel_file).read_bytes()).hexdigest()
+    else:
+        raise ValueError("create requires --wheel-sha256 or --wheel-file")
+    if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError("wheel sha256 must be 64 lowercase hex characters")
+    return url, digest
+
+
+
 def create(args: argparse.Namespace) -> None:
     provider = _provider(args)
     template = json.loads(Path(args.template).read_text(encoding="utf-8"))
@@ -30,9 +60,11 @@ def create(args: argparse.Namespace) -> None:
     token = Path(args.agent_token_file).read_text(encoding="utf-8").strip()
     if not token:
         raise ValueError("agent token file is empty")
+    wheel_url, wheel_sha256 = _wheel_source(args)
     environment = {
         "DGPU_ENDPOINT": args.endpoint.rstrip("/"),
-        "DGPU_WHEEL_URL": args.wheel_url,
+        "DGPU_WHEEL_URL": wheel_url,
+        "DGPU_WHEEL_SHA256": wheel_sha256,
         "DGPU_AGENT_ID": args.name,
         "DGPU_PROVIDER_RESOURCE_ID": args.name,
         "DGPU_TOKEN": token,
@@ -121,6 +153,15 @@ def parser() -> argparse.ArgumentParser:
     create_parser = sub.add_parser("create")
     create_parser.add_argument("--endpoint", required=True)
     create_parser.add_argument("--wheel-url", required=True)
+    create_parser.add_argument(
+        "--wheel-sha256",
+        help="SHA-256 of the bootstrap wheel; the worker pip-installs "
+        "--wheel-url with a #sha256= fragment so the digest is verified.",
+    )
+    create_parser.add_argument(
+        "--wheel-file",
+        help="local wheel to hash instead of passing --wheel-sha256",
+    )
     create_parser.add_argument("--agent-token-file", required=True)
     create_parser.add_argument(
         "--template", default="deploy/salad-sdxl-worker.json"

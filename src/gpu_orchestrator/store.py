@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -316,7 +317,32 @@ CREATE TABLE IF NOT EXISTS scaling_leases (
     acquired_at          TEXT NOT NULL,
     expires_at           TEXT NOT NULL
 );
+
+-- Durable grant records for client-uploaded job input blobs. The blob bytes
+-- live in the content-addressed artifact store; this table is the
+-- authorization record that binds a blob digest to one project and records
+-- the workload contract the upload was validated against. There is no delete:
+-- blobs are immutable, so the grant stays valid for replayed submissions.
+CREATE TABLE IF NOT EXISTS inputs (
+    project_id TEXT NOT NULL,
+    sha256     TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    media_type TEXT NOT NULL,
+    size       INTEGER NOT NULL,
+    workload   TEXT NOT NULL,
+    uploader   TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (project_id, sha256)
+);
+
+CREATE INDEX IF NOT EXISTS inputs_digest ON inputs(sha256);
 """
+
+
+INPUT_URI_RE = re.compile(
+    r"^/v1/projects/(?P<project>[a-z][a-z0-9_-]{1,62})/inputs/(?P<sha256>[0-9a-f]{64})$"
+)
+INPUT_ENTRY_KEYS = {"name", "uri", "sha256", "size", "media_type"}
 
 
 JSON_COLUMNS = {
@@ -463,6 +489,7 @@ class Store:
         inputs: Sequence[dict[str, Any]] = (),
     ) -> dict[str, Any]:
         now = _iso(self.clock())
+        resolved_inputs = self._resolve_inputs(project_id, inputs or ())
         with self._transaction() as conn:
             if idempotency_key:
                 existing = conn.execute(
@@ -474,7 +501,7 @@ class Store:
                         existing["workload"] == admitted.workload
                         and existing["route"] == admitted.route
                         and existing["payload_json"] == _json(admitted.payload)
-                        and existing["inputs_json"] == _json(list(inputs))
+                        and existing["inputs_json"] == _json(resolved_inputs)
                         and int(existing["priority"]) == int(priority)
                     )
                     if not same_request:
@@ -501,7 +528,7 @@ class Store:
                     admitted.workload_version,
                     admitted.route,
                     _json(admitted.payload),
-                    _json(list(inputs)),
+                    _json(resolved_inputs),
                     _json(admitted.requirements),
                     _json(admitted.executor),
                     _json(admitted.input_contract),
@@ -520,6 +547,139 @@ class Store:
             row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
             assert row is not None
             return self._job_doc(row)
+
+    # ---- project-scoped input blobs ----
+
+    def put_input(
+        self,
+        *,
+        project_id: str,
+        name: str,
+        sha256: str,
+        size: int,
+        media_type: str,
+        workload: str,
+        uploader: str,
+    ) -> dict[str, Any]:
+        """Record a durable grant for an uploaded input blob.
+
+        Grants are immutable and content-keyed: re-uploading identical bytes
+        under a different name keeps the first record, which is safe because
+        only ``(project_id, sha256)`` authorizes later use.
+        """
+        now = _iso(self.clock())
+        with self._transaction() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO inputs (
+                    project_id, sha256, name, media_type, size, workload,
+                    uploader, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    project_id,
+                    sha256,
+                    name,
+                    media_type,
+                    int(size),
+                    workload,
+                    uploader,
+                    now,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM inputs WHERE project_id = ? AND sha256 = ?",
+                (project_id, sha256),
+            ).fetchone()
+            assert row is not None
+            return dict(row)
+
+    def get_input(self, project_id: str, sha256: str) -> dict[str, Any] | None:
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM inputs WHERE project_id = ? AND sha256 = ?",
+                (project_id, sha256),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def _resolve_inputs(
+        self, project_id: str, inputs: Sequence[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Bind declared job inputs to project-owned blobs, or reject them.
+
+        A job may only reference blobs previously uploaded through
+        ``/v1/projects/{project}/inputs``; external ``http``/``file`` URIs or
+        digests outside the project's grants are forged and fail submission.
+        The stored document is canonicalized to the controller's URI and the
+        grant's verified size/digest/media type.
+        """
+        resolved: list[dict[str, Any]] = []
+        for index, item in enumerate(inputs):
+            if not isinstance(item, dict):
+                raise ValueError(f"inputs[{index}] must be an object")
+            unknown = set(item) - INPUT_ENTRY_KEYS
+            if unknown:
+                raise ValueError(
+                    f"inputs[{index}] has unknown fields: {', '.join(sorted(unknown))}"
+                )
+            name = item.get("name")
+            uri = item.get("uri")
+            sha256 = item.get("sha256")
+            if not isinstance(name, str) or not name:
+                raise ValueError(f"inputs[{index}].name must be a non-empty string")
+            if not isinstance(uri, str):
+                raise ValueError(f"inputs[{index}].uri must be a string")
+            match = INPUT_URI_RE.fullmatch(uri)
+            if match is None:
+                raise ValueError(
+                    f"inputs[{index}].uri must be an uploaded controller input "
+                    "(/v1/projects/<project>/inputs/<sha256>); external or file "
+                    "URIs are not allowed"
+                )
+            if match.group("project") != project_id:
+                raise ValueError(
+                    f"inputs[{index}] references a blob owned by another project"
+                )
+            # The URI carries the digest; a supplied sha256 must agree with it
+            # (forged mismatches fail), and a missing one is derived.
+            if sha256 is not None and (
+                not isinstance(sha256, str) or sha256 != match.group("sha256")
+            ):
+                raise ValueError(
+                    f"inputs[{index}].sha256 must match the digest in uri"
+                )
+            sha256 = match.group("sha256")
+            declared_size = item.get("size")
+            if declared_size is not None and (
+                isinstance(declared_size, bool)
+                or not isinstance(declared_size, int)
+                or declared_size < 0
+            ):
+                raise ValueError(f"inputs[{index}].size must be a non-negative integer")
+            grant = self.get_input(project_id, sha256)
+            if grant is None:
+                raise ValueError(
+                    f"inputs[{index}] references an unknown input blob {sha256[:16]}…"
+                )
+            if declared_size is not None and declared_size != int(grant["size"]):
+                raise ValueError(
+                    f"inputs[{index}].size does not match the uploaded blob"
+                )
+            media_type = item.get("media_type")
+            if media_type is not None and media_type != grant["media_type"]:
+                raise ValueError(
+                    f"inputs[{index}].media_type does not match the uploaded blob"
+                )
+            resolved.append(
+                {
+                    "name": name,
+                    "uri": uri,
+                    "sha256": sha256,
+                    "size": int(grant["size"]),
+                    "media_type": grant["media_type"],
+                }
+            )
+        return resolved
 
     def get_job(self, job_id: str) -> dict[str, Any]:
         with self._connection() as conn:

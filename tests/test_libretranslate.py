@@ -13,15 +13,27 @@ from gpu_orchestrator.registry import AdmissionError
 from gpu_orchestrator_workloads import libretranslate
 
 
+_DEFAULT_LANGUAGES = [
+    {"code": "tr", "name": "Turkish", "targets": ["en", "de", "es"]},
+    {"code": "en", "name": "English", "targets": ["tr", "de", "es"]},
+    {"code": "de", "name": "German", "targets": ["en", "tr"]},
+    {"code": "es", "name": "Spanish", "targets": ["en", "tr"]},
+]
+
+
 class _StubService:
     """Minimal loopback stand-in for a pinned local LibreTranslate service."""
 
     def __init__(self, *, status=200, body=b'{"translatedText": "Hello world"}',
-                 content_type="application/json"):
-        handler = _make_handler(status, body, content_type)
+                 content_type="application/json", languages=None,
+                 languages_status=200):
+        self._languages = languages if languages is not None else _DEFAULT_LANGUAGES
+        self._languages_status = languages_status
+        handler = _make_handler(self, status, body, content_type)
         self._server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
         self.url = f"http://127.0.0.1:{self._server.server_address[1]}/translate"
         self.requests = handler.requests
+        self.language_probes = handler.language_probes
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
 
@@ -31,9 +43,10 @@ class _StubService:
         self._thread.join(timeout=5)
 
 
-def _make_handler(status, body, content_type):
+def _make_handler(service, status, body, content_type):
     class Handler(http.server.BaseHTTPRequestHandler):
         requests = []
+        language_probes = []
 
         def do_POST(self):
             length = int(self.headers.get("Content-Length") or 0)
@@ -44,10 +57,26 @@ def _make_handler(status, body, content_type):
             self.end_headers()
             self.wfile.write(body)
 
+        def do_GET(self):
+            Handler.language_probes.append(self.path)
+            payload = json.dumps(service._languages).encode()
+            self.send_response(service._languages_status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
         def log_message(self, *args):
             pass
 
     return Handler
+
+@pytest.fixture(autouse=True)
+def _clear_ready_pairs():
+    libretranslate._READY_PAIRS.clear()
+    yield
+    libretranslate._READY_PAIRS.clear()
+
 
 
 def _job(endpoint, payload):
@@ -255,3 +284,99 @@ def test_admission_binds_the_segment_contract(registry):
 def test_admission_rejects_out_of_contract_payloads(registry, payload, marker):
     with pytest.raises(AdmissionError, match=marker):
         registry.admit("translate-segment", payload)
+
+
+def test_probes_languages_once_then_translates(tmp_path):
+    service = _StubService()
+    try:
+        executor = libretranslate.LibreTranslateExecutor()
+        job = _job(service.url, {"text": "hi", "source": "tr", "target": "en"})
+        executor.execute(job=job, workdir=tmp_path, gpu_index=0)
+        executor.execute(job=job, workdir=tmp_path, gpu_index=0)
+    finally:
+        service.close()
+    assert service.language_probes == ["/languages"]
+    assert len(service.requests) == 2
+
+
+def test_unloaded_language_pair_fails_model_load(tmp_path):
+    service = _StubService(
+        languages=[{"code": "tr", "name": "Turkish", "targets": ["de"]}]
+    )
+    try:
+        with pytest.raises(ExecutionError) as excinfo:
+            libretranslate.LibreTranslateExecutor().execute(
+                job=_job(service.url,
+                         {"text": "hi", "source": "tr", "target": "en"}),
+                workdir=tmp_path,
+                gpu_index=0,
+            )
+        assert excinfo.value.code == "model_load_failed"
+        assert service.requests == []
+    finally:
+        service.close()
+
+
+def test_languages_probe_failure_is_unavailable(tmp_path):
+    service = _StubService(languages_status=503)
+    try:
+        with pytest.raises(ExecutionError) as excinfo:
+            libretranslate.LibreTranslateExecutor().execute(
+                job=_job(service.url,
+                         {"text": "hi", "source": "tr", "target": "en"}),
+                workdir=tmp_path,
+                gpu_index=0,
+            )
+        assert excinfo.value.code == "model_server_unavailable"
+        assert service.requests == []
+    finally:
+        service.close()
+
+
+def test_malformed_languages_response_is_service_error(tmp_path):
+    service = _StubService(languages={"not": "a list"})
+    try:
+        with pytest.raises(ExecutionError) as excinfo:
+            libretranslate.LibreTranslateExecutor().execute(
+                job=_job(service.url,
+                         {"text": "hi", "source": "tr", "target": "en"}),
+                workdir=tmp_path,
+                gpu_index=0,
+            )
+        assert excinfo.value.code == "model_server_error"
+    finally:
+        service.close()
+
+
+def test_error_body_is_sanitized_and_bounded(tmp_path):
+    detail = "x" * (libretranslate.MAX_ERROR_CHARS + 200) + "\x00SECRET\xff"
+    service = _StubService(status=400, body=json.dumps({"error": detail}).encode())
+    try:
+        with pytest.raises(ExecutionError) as excinfo:
+            libretranslate.LibreTranslateExecutor().execute(
+                job=_job(service.url,
+                         {"text": "hi", "source": "tr", "target": "en"}),
+                workdir=tmp_path,
+                gpu_index=0,
+            )
+        assert excinfo.value.code == "translation_rejected"
+        assert "\x00" not in str(excinfo.value)
+        assert len(str(excinfo.value)) < libretranslate.MAX_ERROR_CHARS + 200
+    finally:
+        service.close()
+
+
+def test_oversized_error_body_is_bounded(tmp_path):
+    body = b'{"error": "' + b"a" * (libretranslate.MAX_ERROR_BYTES + 1) + b'"}'
+    service = _StubService(status=500, body=body)
+    try:
+        with pytest.raises(ExecutionError) as excinfo:
+            libretranslate.LibreTranslateExecutor().execute(
+                job=_job(service.url,
+                         {"text": "hi", "source": "tr", "target": "en"}),
+                workdir=tmp_path,
+                gpu_index=0,
+            )
+        assert excinfo.value.code == "output_validation_failed"
+    finally:
+        service.close()

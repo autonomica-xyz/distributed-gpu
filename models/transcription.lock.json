@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "audited_at": "2026-10-15T00:00:00+00:00",
+  "models": [
+    {
+      "format": "huggingface",
+      "model_pack": "parakeet-tdt-0.6b-v3",
+      "model_id": "nvidia/parakeet-tdt-0.6b-v3",
+      "revision": "541d1f99c6b0c3cd0b11a95167540bb8edefd82b",
+      "allow_patterns": [
+        "parakeet-tdt-0.6b-v3.nemo"
+      ],
+      "known_file_sha256": {
+        "parakeet-tdt-0.6b-v3.nemo": "3cbdc85877e668ca7b82d0d56770eb1fac76691f55d6b97545e8d61ca588d10d"
+      },
+      "approx_bytes": 2509000000,
+      "license": "cc-by-4.0",
+      "notes": [
+        "NeMo .nemo archive only; skips the alternate HF/gguf weight variants in the same repo.",
+        "Loaded offline with nemo ASRModel.restore_from(); multilingual auto-detect with word timestamps.",
+        "Public repo, no gate. Provisioning still verifies the LFS sha256 above before install."
+      ]
+    },
+    {
+      "format": "huggingface",
+      "model_pack": "whisperx-large-v3",
+      "model_id": "Systran/faster-whisper-large-v3",
+      "revision": "edaa852ec7e145841d8ffdb056a99866b5f0a478",
+      "allow_patterns": [
+        "config.json",
+        "model.bin",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "vocabulary.json"
+      ],
+      "known_file_sha256": {
+        "model.bin": "69f74147e3334731bc3a76048724833325d2ec74642fb52620eda87352e3d4f1"
+      },
+      "approx_bytes": 3100000000,
+      "license": "mit",
+      "notes": [
+        "Complete CTranslate2 conversion consumed directly by faster-whisper via a local directory path.",
+        "Public repo, no gate. whisperx loads it with local_files_only; nothing fetches at job time."
+      ]
+    },
+    {
+      "format": "huggingface",
+      "model_pack": "whisperx-align-en-wav2vec2-960h",
+      "model_id": "facebook/wav2vec2-base-960h",
+      "revision": "22aad52d435eb6dbaf354bdad9b0da84ce7d6156",
+      "allow_patterns": [
+        "config.json",
+        "feature_extractor_config.json",
+        "model.safetensors",
+        "preprocessor_config.json",
+        "special_tokens_map.json",
+        "tokenizer_config.json",
+        "vocab.json"
+      ],
+      "approx_bytes": 380000000,
+      "license": "apache-2.0",
+      "notes": [
+        "English CTC alignment model for whisperx.load_align_model; safetensors only, skips pytorch/tf duplicates.",
+        "Route sets WHISPERX_ALIGN_LANGUAGES=en; other languages are rejected as unsupported_language.",
+        "Public repo, no gate."
+      ]
+    },
+    {
+      "format": "huggingface",
+      "model_pack": "speaker-diarization-community-1",
+      "model_id": "pyannote/speaker-diarization-community-1",
+      "revision": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+      "allow_patterns": [
+        "config.yaml",
+        "embedding/pytorch_model.bin",
+        "plda/plda.npz",
+        "plda/xvec_transform.npz",
+        "segmentation/pytorch_model.bin"
+      ],
+      "approx_bytes": 35000000,
+      "license": "cc-by-4.0",
+      "gated": "auto",
+      "notes": [
+        "Fully local pyannote.audio v4 pipeline: config.yaml resolves $model/embedding, $model/segmentation and plda from inside the pack.",
+        "HF gate is 'auto' (contact-details form, CC-BY-4.0 with attribution). Fresh cold installs require an approved HF token at provisioning time; jobs never fetch or need tokens.",
+        "whisperx DiarizationPipeline loads the pack directory directly with token=None."
+      ]
+    }
+  ]
+}

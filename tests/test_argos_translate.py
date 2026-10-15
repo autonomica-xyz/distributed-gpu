@@ -207,3 +207,34 @@ def test_safe_extract_strips_one_locked_root(tmp_path):
     files = argos_pack._safe_extract(archive, output, "en_es")
     assert [item["path"] for item in files] == ["metadata.json", "model/model.bin"]
     assert (output / "model" / "model.bin").read_bytes() == b"model"
+
+
+def test_releasing_gpu_drops_only_its_translators(monkeypatch):
+    class Translator:
+        loaded = True
+
+        def unload_model(self):
+            self.loaded = False
+
+    released = Translator()
+    other_gpu = Translator()
+    cpu = Translator()
+    cache = argos_translate.OrderedDict(
+        {
+            ("first", "cuda", 0, "int8_float16"): (released, object()),
+            ("second", "cuda", 1, "int8_float16"): (other_gpu, object()),
+            ("third", "cpu", -1, "int8"): (cpu, object()),
+        }
+    )
+    monkeypatch.setattr(argos_translate, "_RUNTIMES", cache)
+
+    executor = argos_translate.ArgosTranslateExecutor()
+    executor.release_gpu(0)
+    executor.release_gpu(0)
+
+    assert not released.loaded
+    assert other_gpu.loaded and cpu.loaded
+    assert set(cache) == {
+        ("second", "cuda", 1, "int8_float16"),
+        ("third", "cpu", -1, "int8"),
+    }

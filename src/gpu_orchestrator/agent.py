@@ -7,10 +7,12 @@ without requiring the jobs themselves to know about distributed execution.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import importlib
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -37,6 +39,10 @@ class ExecutionError(AgentError):
         super().__init__(message)
         self.code = code
 
+# Declared input names are validated by the workload contract, but the agent
+# also treats them as filenames under workdir/inputs; the same bound keeps
+# path construction safe even against a corrupt job document.
+_INPUT_NAME_RE = re.compile(r"^[a-z][a-z0-9_.-]{0,62}$")
 
 def discover_nvidia_slots(
     agent_id: str,
@@ -203,6 +209,85 @@ class ControlPlaneClient:
         )
         return self._json(response, action)
 
+    def resolve_input_uri(self, uri: str) -> str:
+        """Return the controller-relative request path for an input blob URI.
+
+        Submitted input URIs are always ``/v1/projects/.../inputs/...`` (or
+        the same path absolute on the controller's own origin). Any external,
+        ``file://``, or off-origin URI is rejected here rather than fetched:
+        honoring it would smuggle the bearer token to a third party or read
+        arbitrary worker-local files.
+        """
+        if not isinstance(uri, str) or not uri:
+            raise AgentError("input uri must be a non-empty string")
+        path = uri
+        if "://" in uri:
+            base = str(self.client.base_url).rstrip("/")
+            if uri.startswith(base + "/"):
+                path = uri[len(base):]
+            else:
+                raise AgentError(
+                    "input uri must stay on the controller origin; "
+                    "external or file URIs are refused"
+                )
+        elif not uri.startswith("/"):
+            raise AgentError("input uri must be an absolute controller path")
+        if not path.startswith("/v1/projects/"):
+            raise AgentError("input uri does not reference a controller input blob")
+        return path
+
+    def download_input(
+        self,
+        uri: str,
+        *,
+        job_id: str,
+        slot_id: str,
+        lease_token: str,
+        destination: Path,
+        max_bytes: int,
+        check: Callable[[], None] | None = None,
+    ) -> tuple[int, str]:
+        """Stream an authorized input blob to ``destination``.
+
+        Requires the job lease (the controller authorizes only blobs the job
+        declared). Writes through a sibling temp file so failures never leave
+        a partial blob at the final name, and returns ``(size, sha256)`` for
+        the caller to compare against the declared metadata. Remote error
+        bodies are never echoed into the exception.
+        """
+        path = self.resolve_input_uri(uri)
+        digest = hashlib.sha256()
+        size = 0
+        part = destination.with_name(destination.name + f".{os.getpid()}.part")
+        try:
+            with self.client.stream(
+                "GET",
+                path,
+                params={"job_id": job_id, "slot_id": slot_id},
+                headers={"X-DGPU-Lease-Token": lease_token},
+            ) as response:
+                if response.status_code < 200 or response.status_code >= 300:
+                    raise AgentError(
+                        f"input download failed: HTTP {response.status_code}"
+                    )
+                with part.open("wb") as handle:
+                    for chunk in response.iter_bytes():
+                        if check is not None:
+                            check()
+                        size += len(chunk)
+                        if size > max_bytes:
+                            raise AgentError(
+                                f"input exceeds declared bound max_bytes={max_bytes}"
+                            )
+                        digest.update(chunk)
+                        handle.write(chunk)
+            os.replace(part, destination)
+        except httpx.HTTPError as exc:
+            raise AgentError(f"input download failed: {type(exc).__name__}") from exc
+        finally:
+            part.unlink(missing_ok=True)
+        return size, digest.hexdigest()
+
 
 @dataclass(frozen=True)
 class AgentConfig:
@@ -213,7 +298,15 @@ class AgentConfig:
     poll_seconds: float = 1.0
 
 
-DRAINING_EXECUTION_ERRORS = {"model_server_unavailable", "model_load_failed"}
+DRAINING_EXECUTION_ERRORS = {
+    # Fatal worker conditions: fail the job, then drain the agent so no
+    # further work is claimed into a possibly corrupted GPU context or an
+    # unreleased VRAM allocation.
+    "model_server_unavailable",
+    "model_load_failed",
+    "cuda_context_failure",
+    "plugin_release_failed",
+}
 
 
 class AgentRunner:
@@ -225,6 +318,11 @@ class AgentRunner:
         self.client = client
         self.config = config
         self.stop = threading.Event()
+        # One live plugin instance per slot. Plugin executors hold expensive
+        # state (GPU weights), so a slot reuses the instance while consecutive
+        # jobs use the same handler, and releases it when the handler changes,
+        # a non-plugin job needs the GPU, or the agent stops.
+        self._plugins: dict[str, tuple[str, Any]] = {}
 
     def request_drain(self) -> None:
         self.stop.set()
@@ -293,6 +391,28 @@ class AgentRunner:
             )
             for sig, handler in previous_handlers.items():
                 signal.signal(sig, handler)
+            # Slot threads have joined; no executor can still be using a
+            # plugin instance. Release leftover GPU state without masking a
+            # primary slot error.
+            gpu_by_slot = {
+                slot.id: slot.gpu_index for slot in self.config.registration.slots
+            }
+            for slot_id, (_handler, instance) in self._plugins.items():
+                release = getattr(instance, "release_gpu", None)
+                if not callable(release):
+                    continue
+                try:
+                    release(gpu_by_slot.get(slot_id, 0))
+                except Exception as exc:
+                    # Logged and surfaced only when no slot raised first —
+                    # shutdown cleanup must never mask the primary error.
+                    print(
+                        f"slot {slot_id}: plugin release_gpu failed during "
+                        f"shutdown: {type(exc).__name__}: {exc}",
+                        flush=True,
+                    )
+                    thread_errors.append(exc)
+            self._plugins.clear()
         if thread_errors:
             raise thread_errors[0]
 
@@ -390,6 +510,13 @@ class AgentRunner:
     ) -> list[dict[str, Any]]:
         executor = job["executor"]
         executor_type = executor["type"]
+        if executor_type != "plugin":
+            # A plugin from a previous job may still hold this slot's VRAM;
+            # release it before a command/container/http job needs the GPU.
+            self._release_slot_plugin(slot)
+            lease.check()
+        self._materialize_inputs(job, workdir, lease)
+        lease.check()
         if executor_type in {"command", "container"}:
             return self._execute_process(
                 slot,
@@ -401,8 +528,124 @@ class AgentRunner:
         if executor_type == "http":
             return self._execute_http(slot, job, workdir, lease)
         if executor_type == "plugin":
-            return self._execute_plugin(slot, job, workdir)
+            return self._execute_plugin(slot, job, workdir, lease)
         raise ExecutionError("executor_unsupported", f"unsupported executor {executor_type!r}")
+
+    def _release_slot_plugin(self, slot: SlotInventory) -> None:
+        """Release the slot's cached plugin instance, then drop it.
+
+        Executors may define ``release_gpu(gpu_index)`` to unload weights for
+        only this GPU. The instance stays registered until release succeeds:
+        a failed release must not leave the slot believing VRAM is free, so
+        the failure is raised as ``plugin_release_failed`` (a draining error —
+        the job fails and the slot stops claiming) and the instance is retried
+        once more at shutdown.
+        """
+        entry = self._plugins.get(slot.id)
+        if entry is None:
+            return
+        _handler, instance = entry
+        release = getattr(instance, "release_gpu", None)
+        if callable(release):
+            try:
+                release(slot.gpu_index)
+            except Exception as exc:
+                raise ExecutionError(
+                    "plugin_release_failed",
+                    f"plugin release_gpu failed: {type(exc).__name__}: {exc}",
+                ) from exc
+        self._plugins.pop(slot.id, None)
+
+    def _materialize_inputs(
+        self, job: dict[str, Any], workdir: Path, lease: "_LeaseKeeper"
+    ) -> None:
+        """Download and verify every declared input before any executor runs.
+
+        Only blobs the controller granted to this job are fetched, always
+        lease-checked, and each entry is rewritten in place so executors see
+        ``path`` (absolute file under ``workdir/inputs``) and a local
+        ``file://`` ``uri``. Declared size/digest are verified after the
+        bounded stream so corrupt transport fails the job as
+        ``artifact_transport_failed``.
+        """
+        inputs = job.get("inputs") or []
+        if not inputs:
+            return
+        contract = {item["name"]: item for item in job.get("input_contract") or []}
+        inputs_dir = workdir / "inputs"
+        inputs_dir.mkdir(parents=True, exist_ok=True)
+        seen: dict[str, int] = {}
+        for item in inputs:
+            name = str(item.get("name") or "")
+            spec = contract.get(name)
+            if spec is None:
+                raise ExecutionError(
+                    "input_validation_failed", f"undeclared input artifact {name!r}"
+                )
+            if not _INPUT_NAME_RE.fullmatch(name):
+                raise ExecutionError(
+                    "input_validation_failed", f"unsafe input name {name!r}"
+                )
+            declared_size = item.get("size")
+            if (
+                isinstance(declared_size, bool)
+                or not isinstance(declared_size, int)
+                or declared_size < 0
+            ):
+                raise ExecutionError(
+                    "input_validation_failed", f"input {name!r} has invalid size"
+                )
+            if declared_size > int(spec["max_bytes"]):
+                raise ExecutionError(
+                    "input_validation_failed",
+                    f"input {name!r} exceeds max_bytes={spec['max_bytes']}",
+                )
+            media_types = set(spec.get("media_types") or [])
+            if media_types and item.get("media_type") not in media_types:
+                raise ExecutionError(
+                    "input_validation_failed",
+                    f"input {name!r} has disallowed media type {item.get('media_type')!r}",
+                )
+            uri = item.get("uri")
+            try:
+                self.client.resolve_input_uri(str(uri))
+            except AgentError as exc:
+                raise ExecutionError(
+                    "input_validation_failed",
+                    f"input {name!r} uri is not a controller input blob: {exc}",
+                ) from exc
+            seen[name] = seen.get(name, 0) + 1
+            filename = name if seen[name] == 1 else f"{seen[name]}-{name}"
+            destination = inputs_dir / filename
+            try:
+                size, digest = self.client.download_input(
+                    str(uri),
+                    job_id=lease.job_id,
+                    slot_id=lease.slot_id,
+                    lease_token=lease.lease_token,
+                    destination=destination,
+                    max_bytes=min(declared_size, int(spec["max_bytes"])),
+                    check=lease.check,
+                )
+            except AgentError as exc:
+                if isinstance(exc, ExecutionError):
+                    raise
+                raise ExecutionError(
+                    "artifact_transport_failed",
+                    f"input {name!r} download failed: {exc}",
+                ) from exc
+            if size != declared_size:
+                raise ExecutionError(
+                    "artifact_transport_failed",
+                    f"input {name!r} size {size} does not match declared {declared_size}",
+                )
+            if digest != str(item.get("sha256") or ""):
+                raise ExecutionError(
+                    "artifact_transport_failed",
+                    f"input {name!r} sha256 does not match the declared digest",
+                )
+            item["path"] = str(destination)
+            item["uri"] = destination.resolve().as_uri()
 
     def _execute_process(
         self,
@@ -415,7 +658,10 @@ class AgentRunner:
     ) -> list[dict[str, Any]]:
         executor = job["executor"]
         request_path = workdir / "request.json"
-        request_path.write_text(json.dumps(job, sort_keys=True), encoding="utf-8")
+        request_path.write_text(
+            json.dumps(_process_request(job, workdir, container=container), sort_keys=True),
+            encoding="utf-8",
+        )
         output_manifest = workdir / "outputs.json"
         environment = {
             **os.environ,
@@ -537,16 +783,37 @@ class AgentRunner:
         return [_artifact_from_path(spec["name"], path, media_type)]
 
     def _execute_plugin(
-        self, slot: SlotInventory, job: dict[str, Any], workdir: Path
+        self,
+        slot: SlotInventory,
+        job: dict[str, Any],
+        workdir: Path,
+        lease: "_LeaseKeeper",
     ) -> list[dict[str, Any]]:
-        module_name, separator, attribute = job["executor"]["handler"].partition(":")
+        handler_spec = job["executor"]["handler"]
+        module_name, separator, attribute = handler_spec.partition(":")
         if not separator:
             raise ExecutionError("executor_contract_invalid", "plugin handler must be module:attribute")
+        # The previous plugin keeps the slot's VRAM until now; releasing it
+        # after the job's inputs are staged keeps download time overlapped
+        # with weights already loaded for a warm same-handler run.
+        entry = self._plugins.get(slot.id)
+        if entry is not None and entry[0] != handler_spec:
+            self._release_slot_plugin(slot)
+            lease.check()
+            entry = None
+        if entry is not None:
+            instance = entry[1]
+        else:
+            try:
+                instance = getattr(importlib.import_module(module_name), attribute)()
+            except (ImportError, AttributeError) as exc:
+                raise ExecutionError("executor_unavailable", str(exc)) from exc
+            self._plugins[slot.id] = (handler_spec, instance)
         try:
-            handler = getattr(importlib.import_module(module_name), attribute)
-            result = handler().execute(job=job, workdir=workdir, gpu_index=slot.gpu_index)
+            result = instance.execute(job=job, workdir=workdir, gpu_index=slot.gpu_index)
         except (ImportError, AttributeError) as exc:
             raise ExecutionError("executor_unavailable", str(exc)) from exc
+        lease.check()
         return [
             _artifact_from_path(item["name"], Path(item["path"]), item["media_type"])
             for item in result
@@ -635,6 +902,40 @@ def _load_output_manifest(path: Path, workdir: Path) -> list[dict[str, Any]]:
             raise ExecutionError("output_validation_failed", "output path escapes workdir") from exc
         outputs.append(_artifact_from_path(item["name"], candidate, item["media_type"]))
     return outputs
+
+
+def _process_request(
+    job: dict[str, Any], workdir: Path, *, container: bool
+) -> dict[str, Any]:
+    """Job document written to request.json for command/container executors.
+
+    Materialized ``inputs[].path`` values are host-absolute paths under
+    ``workdir``; a container only sees ``workdir`` bind-mounted at ``/job``,
+    so for containers every input path and file:// URI is rewritten to the
+    in-container location. Paths that somehow escaped the workdir are
+    rejected instead of silently mapped. The job document is deep-copied, not
+    mutated.
+    """
+    document = copy.deepcopy(job)
+    if not container:
+        return document
+    root = workdir.resolve()
+    for index, item in enumerate(document.get("inputs") or []):
+        raw = item.get("path")
+        if not raw:
+            continue
+        candidate = Path(str(raw)).resolve()
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError as exc:
+            raise ExecutionError(
+                "input_validation_failed",
+                f"inputs[{index}] path is outside the job workdir",
+            ) from exc
+        container_path = Path("/job") / relative
+        item["path"] = str(container_path)
+        item["uri"] = container_path.as_uri()
+    return document
 
 
 def _artifact_from_path(name: str, path: Path, media_type: str) -> dict[str, Any]:

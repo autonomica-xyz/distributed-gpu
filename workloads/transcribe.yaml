@@ -1,29 +1,123 @@
 api_version: distributed-gpu.example/v1alpha1
 name: transcribe
-version: "1"
-description: Contract scaffold for transcription as a standalone workload pack.
+version: "2"
+description: >-
+  GPU audio transcription to a normalized JSON transcript with word timings.
+  Two fixed routes: NeMo parakeet-tdt-0.6b-v3 (no diarization or hotword
+  support - both are rejected, never ignored) and whisperx (faster-whisper
+  large-v3 plus forced wav2vec2 alignment, with optional real pyannote
+  speaker diarization). Models come only from hash-verified provisioned packs;
+  jobs supply schema-bounded data and one materialized audio input.
 default_route: parakeet
 payload_schema:
   $schema: https://json-schema.org/draft/2020-12/schema
   type: object
-  additionalProperties: true
-  required: [expected_language, expected_language_source, audio_hours]
+  additionalProperties: false
+  required: [audio_hours]
   properties:
-    expected_language: {type: string, pattern: "^[a-z]{2,3}$"}
-    expected_language_source: {type: string, minLength: 1}
-    audio_hours: {type: number, exclusiveMinimum: 0, maximum: 24}
-    hotwords: {type: [string, array]}
+    audio_hours:
+      type: number
+      exclusiveMinimum: 0
+      maximum: 4
+    language:
+      type: string
+      pattern: "^(auto|[a-z]{2,3})$"
+      default: auto
+    hotwords:
+      anyOf:
+        - type: string
+          maxLength: 2000
+        - type: array
+          maxItems: 64
+          items: {type: string, minLength: 1, maxLength: 200}
     diarize: {type: boolean, default: false}
+    num_speakers: {type: integer, minimum: 1, maximum: 32}
+    min_speakers: {type: integer, minimum: 1, maximum: 32}
+    max_speakers: {type: integer, minimum: 1, maximum: 32}
 inputs:
   - name: audio
-    media_types: [audio/mpeg, audio/wav, audio/flac, audio/mp4]
-    max_bytes: 17179869184
+    media_types: [audio/mpeg, audio/wav, audio/x-wav, audio/flac, audio/mp4, audio/ogg]
+    max_bytes: 4294967296
     validator: media_probe
 outputs:
   - name: transcript
     media_types: [application/json]
     max_bytes: 104857600
-    validator: json
+    validator: json_schema
+    schema:
+      type: object
+      additionalProperties: false
+      required:
+        - job_id
+        - engine
+        - language
+        - language_source
+        - audio
+        - diarized
+        - speaker_count
+        - models
+        - device
+        - elapsed_seconds
+        - segment_count
+        - word_count
+        - text
+        - segments
+      properties:
+        job_id: {type: string}
+        engine: {enum: [parakeet, whisperx]}
+        language: {type: string, minLength: 1}
+        language_source: {enum: [declared, detected]}
+        audio:
+          type: object
+          required: [duration_seconds]
+          properties:
+            name: {type: string}
+            sha256: {type: [string, "null"]}
+            size: {type: [integer, "null"]}
+            media_type: {type: [string, "null"]}
+            duration_seconds: {type: number, exclusiveMinimum: 0}
+        audio_hours_declared: {type: number}
+        hotwords:
+          type: array
+          items: {type: string}
+        diarized: {type: boolean}
+        speaker_count: {type: [integer, "null"], minimum: 0}
+        models:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [role, model_pack, model_id, revision]
+            properties:
+              role: {enum: [asr, alignment, diarization]}
+              model_pack: {type: string, minLength: 1}
+              model_id: {type: string, minLength: 1}
+              revision: {type: string, pattern: "^[0-9a-f]{40}$"}
+        device: {type: string}
+        elapsed_seconds: {type: number, minimum: 0}
+        segment_count: {type: integer, minimum: 0}
+        word_count: {type: integer, minimum: 0}
+        text: {type: string}
+        segments:
+          type: array
+          items:
+            type: object
+            required: [start, end, text, speaker, words]
+            properties:
+              start: {type: number, minimum: 0}
+              end: {type: number, minimum: 0}
+              text: {type: string, minLength: 1}
+              speaker: {type: [string, "null"]}
+              words:
+                type: array
+                items:
+                  type: object
+                  required: [word, start, end, speaker]
+                  properties:
+                    word: {type: string}
+                    start: {type: number}
+                    end: {type: number}
+                    speaker: {type: [string, "null"]}
 routes:
   parakeet:
     compatibility:
@@ -40,6 +134,13 @@ routes:
       type: plugin
       handler: gpu_orchestrator_workloads.transcription:ParakeetExecutor
       timeout_seconds: 14400
+      environment:
+        PARAKEET_MODEL_PACK: parakeet-tdt-0.6b-v3
+        PARAKEET_MODEL_ID: nvidia/parakeet-tdt-0.6b-v3
+        PARAKEET_MODEL_REVISION: 541d1f99c6b0c3cd0b11a95167540bb8edefd82b
+        PARAKEET_MODEL_DIR: /models/parakeet-tdt-0.6b-v3
+        PARAKEET_BATCH_SIZE: "8"
+        PARAKEET_MAX_AUDIO_SECONDS: "14400"
     cost:
       unit: audio_hour
       default_units_per_job: 0.75
@@ -49,7 +150,10 @@ routes:
   whisperx:
     compatibility:
       capability: transcribe-whisperx
-      model_packs: [whisperx-large-v3]
+      model_packs:
+        - whisperx-large-v3
+        - whisperx-align-en-wav2vec2-960h
+        - speaker-diarization-community-1
     resources:
       gpu_count: 1
       vendor: nvidia
@@ -61,6 +165,24 @@ routes:
       type: plugin
       handler: gpu_orchestrator_workloads.transcription:WhisperXExecutor
       timeout_seconds: 14400
+      environment:
+        WHISPERX_MODEL_PACK: whisperx-large-v3
+        WHISPERX_MODEL_ID: Systran/faster-whisper-large-v3
+        WHISPERX_MODEL_REVISION: edaa852ec7e145841d8ffdb056a99866b5f0a478
+        WHISPERX_MODEL_DIR: /models/whisperx-large-v3
+        WHISPERX_COMPUTE_TYPE: float16
+        WHISPERX_BATCH_SIZE: "16"
+        WHISPERX_MAX_AUDIO_SECONDS: "14400"
+        WHISPERX_ALIGN_MODEL_PACK: whisperx-align-en-wav2vec2-960h
+        WHISPERX_ALIGN_MODEL_ID: facebook/wav2vec2-base-960h
+        WHISPERX_ALIGN_MODEL_REVISION: 22aad52d435eb6dbaf354bdad9b0da84ce7d6156
+        WHISPERX_ALIGN_MODEL_DIR: /models/whisperx-align-en-wav2vec2-960h
+        WHISPERX_ALIGN_LANGUAGES: en
+        WHISPERX_DIARIZATION: "true"
+        DIARIZATION_MODEL_PACK: speaker-diarization-community-1
+        DIARIZATION_MODEL_ID: pyannote/speaker-diarization-community-1
+        DIARIZATION_MODEL_REVISION: 3533c8cf8e369892e6b79ff1bf80f7b0286a54ee
+        DIARIZATION_MODEL_DIR: /models/speaker-diarization-community-1
     cost:
       unit: audio_hour
       default_units_per_job: 0.75
@@ -76,3 +198,4 @@ retry:
     - gpu_oom
     - cuda_context_failure
     - ffmpeg_decode_error
+    - model_load_failed

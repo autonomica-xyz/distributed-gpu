@@ -25,6 +25,18 @@ _RUNTIME_LOCK = threading.Lock()
 
 
 class ArgosTranslateExecutor:
+    def release_gpu(self, gpu_index: int) -> None:
+        """Free this slot's CUDA translators before another model takes it."""
+        with _RUNTIME_LOCK:
+            keys = [
+                key
+                for key in _RUNTIMES
+                if key[1] == "cuda" and key[2] == gpu_index
+            ]
+            for key in keys:
+                translator, _tokenizer = _RUNTIMES.pop(key)
+                translator.unload_model()
+
     def execute(
         self,
         *,
