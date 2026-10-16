@@ -2,7 +2,7 @@
 """End-to-end harness for real workload families on a real worker.
 
 Drives an isolated TLS control plane (fresh DB, self-signed CA), scoped
-tokens, and the real ``dworker`` CLI (``dworker run --no-dashboard`` against a
+tokens, and the real ``sparehour-worker`` CLI (``sparehour-worker run --no-dashboard`` against a
 harness-owned config). Uploads declared job inputs, downloads output
 artifacts, verifies digests and case expectations, and emits a JSON evidence
 report. No mocks: every job runs the registered executor.
@@ -49,26 +49,26 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from gpu_orchestrator.registry import WorkloadRegistry  # noqa: E402
-from gpu_orchestrator.store import Store  # noqa: E402
+from sparehour.registry import WorkloadRegistry  # noqa: E402
+from sparehour.store import Store  # noqa: E402
 
 TERMINAL = {"succeeded", "dead-letter", "cancelled"}
 
 _CONTROLLER_MAIN = """
 import os, uvicorn
-from gpu_orchestrator.api import create_app
-from gpu_orchestrator.artifacts import ArtifactStore
-from gpu_orchestrator.registry import WorkloadRegistry
-from gpu_orchestrator.service import Orchestrator
-from gpu_orchestrator.store import Store
-store = Store(os.environ["DGPU_E2E_DB"])
+from sparehour.api import create_app
+from sparehour.artifacts import ArtifactStore
+from sparehour.registry import WorkloadRegistry
+from sparehour.service import Orchestrator
+from sparehour.store import Store
+store = Store(os.environ["SPAREHOUR_E2E_DB"])
 orchestrator = Orchestrator(
-    WorkloadRegistry.from_directory(os.environ["DGPU_E2E_WORKLOADS"]), store)
-app = create_app(orchestrator, ArtifactStore(os.environ["DGPU_E2E_ARTIFACTS"]),
+    WorkloadRegistry.from_directory(os.environ["SPAREHOUR_E2E_WORKLOADS"]), store)
+app = create_app(orchestrator, ArtifactStore(os.environ["SPAREHOUR_E2E_ARTIFACTS"]),
                  enable_dashboard=False)
-uvicorn.run(app, host="127.0.0.1", port=int(os.environ["DGPU_E2E_PORT"]),
-            ssl_certfile=os.environ["DGPU_E2E_CERT"],
-            ssl_keyfile=os.environ["DGPU_E2E_KEY"], log_level="warning")
+uvicorn.run(app, host="127.0.0.1", port=int(os.environ["SPAREHOUR_E2E_PORT"]),
+            ssl_certfile=os.environ["SPAREHOUR_E2E_CERT"],
+            ssl_keyfile=os.environ["SPAREHOUR_E2E_KEY"], log_level="warning")
 """
 
 
@@ -314,7 +314,7 @@ def _worker_config(
     packs: list[str],
     config_path: Path,
 ) -> Path:
-    """Write the harness-owned dworker config (mode 0600, private token)."""
+    """Write the harness-owned sparehour-worker config (mode 0600, private token)."""
     dynamic = bool(args.dynamic)
     config = {
         "endpoint": endpoint,
@@ -331,7 +331,7 @@ def _worker_config(
         "dynamic": dynamic,
         "dynamic_poll_seconds": int(args.dynamic_poll_seconds),
         "model_catalog": args.model_catalog or "",
-        "workdir": str(Path(args.root).resolve() / "workdirs" / "dworker"),
+        "workdir": str(Path(args.root).resolve() / "workdirs" / "sparehour-worker"),
         "dashboard": False,
         "heartbeat_seconds": int(args.heartbeat_seconds),
         "lease_seconds": int(args.lease_seconds),
@@ -348,15 +348,15 @@ def _worker_config(
 def _spawn_worker(
     args: argparse.Namespace, config_path: Path, log: Any
 ) -> subprocess.Popen:
-    """Run the real dworker CLI: ``dworker --config <cfg> run --no-dashboard``.
+    """Run the real sparehour-worker CLI: ``sparehour-worker --config <cfg> run --no-dashboard``.
 
-    dworker ships no ``__main__``, so the module entrypoint is invoked
+    sparehour-worker ships no ``__main__``, so the module entrypoint is invoked
     explicitly with the provided ``--worker-python`` interpreter.
     """
     command = [
         str(args.worker_python),
         "-c",
-        "from dworker.cli import main; raise SystemExit(main())",
+        "from sparehour_worker.cli import main; raise SystemExit(main())",
         "--config",
         str(config_path),
         "run",
@@ -366,9 +366,6 @@ def _spawn_worker(
     env.update(args.worker_env or {})
     env["SSL_CERT_FILE"] = str(args.worker_ca)
     srcs = [str(REPO_ROOT / "src")]
-    dworker_src = REPO_ROOT.parent / "distributed-worker" / "src"
-    if dworker_src.is_dir():
-        srcs.insert(0, str(dworker_src))
     python_path = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (
         os.pathsep.join(srcs)
@@ -457,12 +454,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     server_env = dict(os.environ)
     server_env.update(
         {
-            "DGPU_E2E_DB": str(db_path),
-            "DGPU_E2E_WORKLOADS": str(Path(args.workloads).resolve()),
-            "DGPU_E2E_ARTIFACTS": str(artifacts),
-            "DGPU_E2E_PORT": str(port),
-            "DGPU_E2E_CERT": str(args.cert),
-            "DGPU_E2E_KEY": str(tls_dir / "server.key"),
+            "SPAREHOUR_E2E_DB": str(db_path),
+            "SPAREHOUR_E2E_WORKLOADS": str(Path(args.workloads).resolve()),
+            "SPAREHOUR_E2E_ARTIFACTS": str(artifacts),
+            "SPAREHOUR_E2E_PORT": str(port),
+            "SPAREHOUR_E2E_CERT": str(args.cert),
+            "SPAREHOUR_E2E_KEY": str(tls_dir / "server.key"),
             "PYTHONPATH": str(REPO_ROOT / "src"),
         }
     )
@@ -485,7 +482,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             agent_token,
             capabilities,
             packs,
-            root / "dworker-config.json",
+            root / "sparehour-worker-config.json",
         )
         agent_log = (root / "agent.log").open("w", encoding="utf-8")
         agent = _spawn_worker(args, config_path, agent_log)
@@ -688,9 +685,9 @@ def build_parser() -> argparse.ArgumentParser:
                      help="JSON object merged into the worker environment "
                           "(route model dirs/endpoints)")
     run.add_argument("--cpu-slots", type=int, default=0,
-                     help="vendor=cpu slots for CPU routes (dworker cpu_slots)")
+                     help="vendor=cpu slots for CPU routes (sparehour-worker cpu_slots)")
     run.add_argument("--dynamic", action="store_true",
-                     help="enable dworker dynamic provisioning: worker starts "
+                     help="enable sparehour-worker dynamic provisioning: worker starts "
                           "with no advertised capabilities and selects from "
                           "--model-catalog as queue depth appears")
     run.add_argument("--dynamic-poll-seconds", type=int, default=5)

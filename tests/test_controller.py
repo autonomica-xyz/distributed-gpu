@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from gpu_orchestrator.controller import FleetPlanner, PoolSpec
-from gpu_orchestrator.providers.base import ProviderOffer
+from sparehour.controller import FleetPlanner, PoolSpec
+from sparehour.providers.base import ProviderOffer
 
 from conftest import register_agent
 
@@ -35,7 +35,7 @@ def pool():
         route="diffusers-sdxl",
         worker_prefix="image-standard",
         image="example/worker@sha256:" + "0" * 64,
-        command=["dgpu", "agent"],
+        command=["sparehour", "agent"],
         providers={
             "local": {"max_hourly_cost_usd": 0.01, "require_known_credit": False},
             "vast": {"max_hourly_cost_usd": 0.5, "require_known_credit": True},

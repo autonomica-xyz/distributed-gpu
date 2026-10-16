@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from gpu_orchestrator.api import create_app
-from gpu_orchestrator.artifacts import ArtifactStore
+from sparehour.api import create_app
+from sparehour.artifacts import ArtifactStore
 
 from conftest import register_agent
 
@@ -74,7 +74,7 @@ def test_authenticated_http_lifecycle(orchestrator, store):
     )
     assert claimed.status_code == 200, claimed.text
     lease = claimed.json()["lease_token"]
-    lease_headers = {**bearer(agent_token), "X-DGPU-Lease-Token": lease}
+    lease_headers = {**bearer(agent_token), "X-SPAREHOUR-Lease-Token": lease}
 
     confirmed = api.post(
         f"/v1/jobs/{job_id}/confirm?slot_id=slot-a", headers=lease_headers
@@ -233,7 +233,7 @@ def test_output_is_validated_brokered_and_downloadable(orchestrator, store, tmp_
     api = TestClient(create_app(orchestrator, ArtifactStore(tmp_path / "artifacts")))
     lease_headers = {
         **bearer(agent_token),
-        "X-DGPU-Lease-Token": claim["lease_token"],
+        "X-SPAREHOUR-Lease-Token": claim["lease_token"],
         "Content-Type": "application/json",
     }
     invalid = api.put(
@@ -267,7 +267,7 @@ def test_output_is_validated_brokered_and_downloadable(orchestrator, store, tmp_
 def test_optional_public_bootstrap_serves_only_wheels(orchestrator, tmp_path):
     bootstrap = tmp_path / "bootstrap"
     bootstrap.mkdir()
-    wheel = bootstrap / "distributed_gpu-0.1.0-py3-none-any.whl"
+    wheel = bootstrap / "sparehour-0.1.0-py3-none-any.whl"
     wheel.write_bytes(b"wheel-content")
     (bootstrap / "secret.txt").write_text("not public", encoding="utf-8")
     api = TestClient(create_app(orchestrator, bootstrap_directory=bootstrap))

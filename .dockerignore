@@ -1,6 +1,6 @@
 *
 !dist/
-!dist/distributed_gpu-*.whl
+!dist/sparehour-*.whl
 !state/
 !state/model-packs/
 !state/model-packs/en_es/

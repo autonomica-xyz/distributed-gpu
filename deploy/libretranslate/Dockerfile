@@ -3,6 +3,6 @@ FROM libretranslate/libretranslate@sha256:726d14b752c6a9c5463f4e2b8f3aab5e78602b
 # LibreTranslate's CUDA image can fall back to a large CPU ONNX thread pool
 # for every MiniSBD model. Bound sentence splitting without changing
 # CTranslate2's CUDA translation path.
-COPY sitecustomize.py /opt/dgpu-python/sitecustomize.py
-ENV PYTHONPATH=/opt/dgpu-python \
-    DGPU_MINISBD_THREADS=1
+COPY sitecustomize.py /opt/sparehour-python/sitecustomize.py
+ENV PYTHONPATH=/opt/sparehour-python \
+    SPAREHOUR_MINISBD_THREADS=1

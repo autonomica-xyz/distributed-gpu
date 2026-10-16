@@ -1,4 +1,4 @@
-from gpu_orchestrator.autoscaler import (
+from sparehour.autoscaler import (
     ProviderCandidate,
     ScalingInputs,
     estimate_target_slots,

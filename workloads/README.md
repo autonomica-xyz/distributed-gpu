@@ -9,7 +9,7 @@ GTX 1070/1080-class Pascal cards are eligible at cc 6.1, but lack the RTX
 Tensor Core fast path and must be benchmarked as a separate economics tier:
 
 ```sh
-dgpu agent --endpoint https://gpu-control.example.com --agent-id host-a \
+sparehour agent --endpoint https://gpu-control.example.com --agent-id host-a \
   --capability libretranslate --model-pack libretranslate-1.9.6-bounded-sbd
 ```
 

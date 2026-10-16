@@ -8,8 +8,8 @@ from pathlib import Path
 
 
 def main() -> None:
-    request = json.loads(Path(os.environ["DGPU_REQUEST_JSON"]).read_text(encoding="utf-8"))
-    output_dir = Path(os.environ["DGPU_OUTPUT_DIR"])
+    request = json.loads(Path(os.environ["SPAREHOUR_REQUEST_JSON"]).read_text(encoding="utf-8"))
+    output_dir = Path(os.environ["SPAREHOUR_OUTPUT_DIR"])
     result = output_dir / "result.json"
     result.write_text(
         json.dumps(
@@ -22,7 +22,7 @@ def main() -> None:
         ),
         encoding="utf-8",
     )
-    Path(os.environ["DGPU_OUTPUT_MANIFEST"]).write_text(
+    Path(os.environ["SPAREHOUR_OUTPUT_MANIFEST"]).write_text(
         json.dumps(
             {
                 "files": [

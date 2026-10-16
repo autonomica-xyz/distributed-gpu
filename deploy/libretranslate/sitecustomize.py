@@ -9,7 +9,7 @@ from argostranslate import sbd
 
 def _minisbd_threads() -> int:
     try:
-        return max(1, int(os.getenv("DGPU_MINISBD_THREADS", "1")))
+        return max(1, int(os.getenv("SPAREHOUR_MINISBD_THREADS", "1")))
     except ValueError:
         return 1
 

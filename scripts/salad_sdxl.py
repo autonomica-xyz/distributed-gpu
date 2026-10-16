@@ -9,8 +9,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-from gpu_orchestrator.models import ResourceRequirements
-from gpu_orchestrator.providers import (
+from sparehour.models import ResourceRequirements
+from sparehour.providers import (
     SaladProvider,
     WorkerLaunchSpec,
     destroy_and_verify_absent,
@@ -62,12 +62,12 @@ def create(args: argparse.Namespace) -> None:
         raise ValueError("agent token file is empty")
     wheel_url, wheel_sha256 = _wheel_source(args)
     environment = {
-        "DGPU_ENDPOINT": args.endpoint.rstrip("/"),
-        "DGPU_WHEEL_URL": wheel_url,
-        "DGPU_WHEEL_SHA256": wheel_sha256,
-        "DGPU_AGENT_ID": args.name,
-        "DGPU_PROVIDER_RESOURCE_ID": args.name,
-        "DGPU_TOKEN": token,
+        "SPAREHOUR_ENDPOINT": args.endpoint.rstrip("/"),
+        "SPAREHOUR_WHEEL_URL": wheel_url,
+        "SPAREHOUR_WHEEL_SHA256": wheel_sha256,
+        "SPAREHOUR_AGENT_ID": args.name,
+        "SPAREHOUR_PROVIDER_RESOURCE_ID": args.name,
+        "SPAREHOUR_TOKEN": token,
         "HF_HOME": "/models/huggingface",
         "HF_HUB_DISABLE_TELEMETRY": "1",
         "PIP_DISABLE_PIP_VERSION_CHECK": "1",

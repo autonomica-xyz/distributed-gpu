@@ -64,7 +64,7 @@ def main() -> None:
             },
             "executor": {
                 "type": "plugin",
-                "handler": "gpu_orchestrator_workloads.argos_translate:ArgosTranslateExecutor",
+                "handler": "sparehour_workloads.argos_translate:ArgosTranslateExecutor",
                 "timeout_seconds": 600,
                 "environment": {
                     "ARGOS_MODEL_DIR": f"/opt/models/{source}_{target}",
@@ -90,7 +90,7 @@ def main() -> None:
             },
         }
     workload = {
-        "api_version": "distributed-gpu.example/v1alpha1",
+        "api_version": "sparehour.example/v1alpha1",
         "name": "translate-batch",
         "version": "2",
         "description": "Ordered, allowlisted popular-language segment batches using reviewed Argos CTranslate2 model packs.",

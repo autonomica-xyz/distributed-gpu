@@ -23,7 +23,7 @@ from typing import Any
 
 import httpx
 
-from gpu_orchestrator.agent import ExecutionError
+from sparehour.agent import ExecutionError
 
 
 DEFAULT_ENDPOINT = "http://127.0.0.1:5001/translate"
@@ -219,7 +219,7 @@ class LibreTranslateBatchExecutor:
     """Translate one ordered, same-language batch through a warm local service.
 
     The explicit batch is generic: producers retain ownership of item identity,
-    while DGPU validates only ordered text segments and an allowlisted language
+    while SPAREHOUR validates only ordered text segments and an allowlisted language
     pair. This amortizes leases, HTTP setup, artifacts, and queue transitions.
     """
 

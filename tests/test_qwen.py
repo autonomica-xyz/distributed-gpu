@@ -9,9 +9,9 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from gpu_orchestrator.agent import ExecutionError
-from gpu_orchestrator.registry import AdmissionError
-from gpu_orchestrator_workloads import qwen
+from sparehour.agent import ExecutionError
+from sparehour.registry import AdmissionError
+from sparehour_workloads import qwen
 
 SERVED_MODEL = "qwen3.5-9b-awq-156edc4"
 MODEL_ID = "cyankiwi/Qwen3.5-9B-AWQ-4bit"

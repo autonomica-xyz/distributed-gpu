@@ -18,7 +18,7 @@ import pytest
 
 from fastapi.testclient import TestClient
 
-from gpu_orchestrator.agent import (
+from sparehour.agent import (
     AgentConfig,
     AgentError,
     AgentRunner,
@@ -26,11 +26,11 @@ from gpu_orchestrator.agent import (
     ExecutionError,
     _process_request,
 )
-from gpu_orchestrator.api import create_app
-from gpu_orchestrator.artifacts import ArtifactStore
-from gpu_orchestrator.models import AgentRegistration, SlotInventory, WorkloadSpec
-from gpu_orchestrator.service import Orchestrator
-from gpu_orchestrator.store import NotFoundError
+from sparehour.api import create_app
+from sparehour.artifacts import ArtifactStore
+from sparehour.models import AgentRegistration, SlotInventory, WorkloadSpec
+from sparehour.service import Orchestrator
+from sparehour.store import NotFoundError
 
 from conftest import register_agent
 
@@ -74,7 +74,7 @@ AUDIO_WORKLOAD = {
             },
             "executor": {
                 "type": "command",
-                "command": ["{agent_python}", "-m", "gpu_orchestrator.demo_executor"],
+                "command": ["{agent_python}", "-m", "sparehour.demo_executor"],
                 "timeout_seconds": 60,
             },
             "cost": {
@@ -244,7 +244,7 @@ def test_agent_download_requires_lease_and_membership(api, store, audio_orchestr
     assert claim["id"] == job["id"]
     lease_headers = {
         **bearer(agent_token),
-        "X-DGPU-Lease-Token": claim["lease_token"],
+        "X-SPAREHOUR-Lease-Token": claim["lease_token"],
     }
     params = {"job_id": job["id"], "slot_id": "agent-a-slot-0"}
 
@@ -289,7 +289,7 @@ def test_agent_download_requires_lease_and_membership(api, store, audio_orchestr
     assert second is not None
     second_headers = {
         **bearer(agent_token),
-        "X-DGPU-Lease-Token": second["lease_token"],
+        "X-SPAREHOUR-Lease-Token": second["lease_token"],
     }
     if second["id"] == other_job["id"]:
         # A job that never declared the blob cannot authorize its download.
@@ -300,7 +300,7 @@ def test_agent_download_requires_lease_and_membership(api, store, audio_orchestr
     # Wrong lease token is rejected even for a valid job.
     assert api.get(
         artifact["uri"],
-        headers={**bearer(agent_token), "X-DGPU-Lease-Token": "forged"},
+        headers={**bearer(agent_token), "X-SPAREHOUR-Lease-Token": "forged"},
         params={"job_id": second["id"], "slot_id": "agent-a-slot-0"},
     ).status_code == 409
 
@@ -701,7 +701,7 @@ def test_shutdown_releases_active_plugin(tmp_path, fake_plugins, monkeypatch):
 
 def test_failed_release_retains_instance_and_is_fatal(tmp_path, fake_plugins):
     """A failed release_gpu must not hand off the GPU or drop the instance."""
-    from gpu_orchestrator.agent import DRAINING_EXECUTION_ERRORS
+    from sparehour.agent import DRAINING_EXECUTION_ERRORS
 
     runner, slot = _runner(tmp_path)
     workdir = tmp_path / "job"

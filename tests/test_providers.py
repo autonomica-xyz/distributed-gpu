@@ -6,16 +6,16 @@ import urllib.error
 
 import pytest
 
-from gpu_orchestrator.models import ResourceRequirements
-from gpu_orchestrator.providers.base import (
+from sparehour.models import ResourceRequirements
+from sparehour.providers.base import (
     ProviderError,
     ProviderOffer,
     ProviderResource,
     WorkerLaunchSpec,
     destroy_and_verify_absent,
 )
-from gpu_orchestrator.providers.vast import VastProvider
-from gpu_orchestrator.providers.salad import SaladProvider
+from sparehour.providers.vast import VastProvider
+from sparehour.providers.salad import SaladProvider
 
 
 class Response:
@@ -84,14 +84,14 @@ def test_vast_launch_uses_documented_docker_flag_environment_string():
             name="worker-1",
             worker_id="worker-1",
             image="example/worker@sha256:" + "0" * 64,
-            command=["dgpu", "agent"],
-            environment={"DGPU_AGENT_ID": "worker-1", "TOKEN": "has spaces"},
+            command=["sparehour", "agent"],
+            environment={"SPAREHOUR_AGENT_ID": "worker-1", "TOKEN": "has spaces"},
         ),
     )
 
     assert resource.resource_id == "123"
     assert isinstance(seen[0]["env"], str)
-    assert "-e DGPU_AGENT_ID=worker-1" in seen[0]["env"]
+    assert "-e SPAREHOUR_AGENT_ID=worker-1" in seen[0]["env"]
     assert "'TOKEN=has spaces'" in seen[0]["env"]
 
 
@@ -226,7 +226,7 @@ def test_salad_launch_applies_selected_gpu_class_priority_and_price():
         WorkerLaunchSpec(
             name="worker-1", worker_id="worker-1",
             image="example/worker@sha256:" + "0" * 64,
-            command=["dgpu", "agent"], environment={"DGPU_AGENT_ID": "worker-1"},
+            command=["sparehour", "agent"], environment={"SPAREHOUR_AGENT_ID": "worker-1"},
             provider_template=template,
         ),
     )
@@ -248,7 +248,7 @@ def test_salad_inventory_reads_current_state_status():
                         "name": "worker-1",
                         "current_state": {"status": "running"},
                         "container": {
-                            "environment_variables": {"DGPU_AGENT_ID": "agent-1"}
+                            "environment_variables": {"SPAREHOUR_AGENT_ID": "agent-1"}
                         },
                     }
                 ]
@@ -279,7 +279,7 @@ def test_salad_inventory_uses_instance_counts_and_selected_live_price():
             "container": {
                 "priority": "batch",
                 "resources": {"gpu_classes": ["2aec4fc1-2270-4e40-b8cc-6e69fae61d4f"]},
-                "environment_variables": {"DGPU_AGENT_ID": "agent-1"},
+                "environment_variables": {"SPAREHOUR_AGENT_ID": "agent-1"},
             },
         }
         if request.full_url.endswith("/worker-1"):

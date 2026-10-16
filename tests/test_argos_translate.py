@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from gpu_orchestrator_workloads import argos_pack, argos_translate
+from sparehour_workloads import argos_pack, argos_translate
 
 
 def _model_pack(tmp_path, *, name="pack", model_pack="test-pack", source="en", target="es"):

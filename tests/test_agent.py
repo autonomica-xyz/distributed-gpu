@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from gpu_orchestrator.agent import (
+from sparehour.agent import (
     AgentConfig,
     AgentError,
     AgentRunner,
@@ -15,7 +15,7 @@ from gpu_orchestrator.agent import (
     _load_output_manifest,
     discover_nvidia_slots,
 )
-from gpu_orchestrator.models import AgentRegistration, SlotInventory
+from sparehour.models import AgentRegistration, SlotInventory
 
 
 def test_nvidia_inventory_becomes_one_slot_per_gpu():
@@ -209,7 +209,7 @@ def test_command_executor_uses_the_agent_python(tmp_path):
             "payload": {"message": "hello"},
             "executor": {
                 "type": "command",
-                "command": ["{agent_python}", "-m", "gpu_orchestrator.demo_executor"],
+                "command": ["{agent_python}", "-m", "sparehour.demo_executor"],
                 "environment": {},
                 "timeout_seconds": 10,
             },

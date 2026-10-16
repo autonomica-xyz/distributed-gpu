@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from gpu_orchestrator.cli import main
-from gpu_orchestrator.store import Store
+from sparehour.cli import main
+from sparehour.store import Store
 
 
 def test_revoke_token_cli_disables_credential(tmp_path, capsys):

@@ -10,8 +10,8 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 
-from gpu_orchestrator.agent import ExecutionError
-from gpu_orchestrator_workloads import sdxl
+from sparehour.agent import ExecutionError
+from sparehour_workloads import sdxl
 
 MODEL_ID = sdxl.DEFAULT_MODEL_ID
 REVISION = sdxl.DEFAULT_MODEL_REVISION
@@ -84,7 +84,7 @@ def test_png_dimensions_and_model_provenance(snapshot, loader, tmp_path):
         image.load()
         assert image.format == "PNG" and image.mode == "RGB"
         assert image.size == (512, 512)
-        provenance = json.loads(image.text["dgpu"])
+        provenance = json.loads(image.text["sparehour"])
     assert provenance == {
         "job_id": "job-image-1", "model": MODEL_ID, "revision": REVISION,
         "variant": "fp16", "seed": 42, "prompt": "a blue lighthouse",

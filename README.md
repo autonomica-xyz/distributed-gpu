@@ -1,6 +1,6 @@
-# Distributed GPU
+# Sparehour
 
-Distributed GPU is an open-source, self-hosted job control plane for running
+Sparehour is an open-source, self-hosted job control plane for running
 background compute across your own machines and rented GPU workers.
 Submit work once, match it to compatible capacity, and collect validated
 results through an API or web workbench.
@@ -10,30 +10,32 @@ generation, transcription, translation, and prompt batches. Each physical GPU
 is one schedulable slot: four GPUs can run four unrelated jobs. It is not a
 multi-GPU model-training or model-sharding framework.
 
-![Operator workbench](assets/screenshots/controller-dashboard.png)
+![Sparehour controller workbench](assets/screenshots/controller-dashboard.png)
 
 *The workbench in a local example deployment with two CPU slots, showing
 completed jobs, running work, and the remaining backlog.*
 
 The companion worker package is
-[distributed-worker](https://github.com/autonomica-xyz/distributed-worker)
-(`dworker`, MIT-licensed): a CLI plus loopback dashboard that inventories
+[Sparehour Worker](https://github.com/autonomica-xyz/sparehour-worker)
+(`sparehour-worker`, MIT-licensed): a CLI plus loopback dashboard that inventories
 NVIDIA, AMD, or spare-CPU capacity on a host, advertises selected
 capabilities, optionally gates claiming on confirmed machine idle, and runs
-the executors defined here. This repository also ships a minimal `dgpu agent`
-loop for headless and pool-deployed workers. Use `dworker` for workstation
+the executors defined here. This repository also ships a minimal `sparehour agent`
+loop for headless and pool-deployed workers. Use `sparehour-worker` for workstation
 controls, idle-aware execution, and a host-local dashboard.
 
-## Videos
+## Historical videos
 
 | Demo | Duration |
 | --- | --- |
 | [Controller: queue to delivered image](assets/videos/controller-demo.mp4) | 60 seconds |
-| [Distributed GPU + dworker overview](assets/videos/overview.mp4) | 45 seconds |
+| [Controller + worker overview](assets/videos/overview.mp4) | 45 seconds |
 
-Captioned recordings show real dashboards and SDXL jobs on one NVIDIA worker,
-edited for length—not a latency benchmark. Runtime and model weights are
-provisioned separately. [Posters, subtitles, and sharing guide](assets/videos/README.md).
+These recordings predate the Sparehour rebrand and show the previous names and
+interface. The screenshot above shows the current design. Captioned recordings
+show real SDXL jobs on one NVIDIA worker, edited for length—not a latency
+benchmark. Runtime and model weights are provisioned separately.
+[Posters, subtitles, and sharing guide](assets/videos/README.md).
 
 ## Features
 
@@ -50,16 +52,17 @@ provisioned separately. [Posters, subtitles, and sharing guide](assets/videos/RE
   blobs that an agent may fetch only while holding a lease on a job that
   references them; outputs are streamed, bounded, content-addressed, and
   validated against the route's artifact spec.
-- **Operator workbench** — a web dashboard at `/dashboard` to watch the fleet,
-  inspect and submit jobs, issue tokens, and run provider deploys.
+- **Operator workbench** — an offline-capable dark dashboard at `/dashboard`
+  with Autonomica colours and system sans typography. Watch fleet capacity and
+  grouped queues, submit jobs, download results, issue tokens, and plan deploys.
 - **Fleet planning** — workload-unit autoscaling math and a read-only
-  multi-provider planner (`dgpu plan`); operator-confirmed Vast/Salad deploys
+  multi-provider planner (`sparehour plan`); operator-confirmed Vast/Salad deploys
   through pool policy files.
 
 ## Workload catalog
 
-`dgpu serve` loads route YAML from `DGPU_WORKLOADS` (default `workloads/`);
-`dgpu validate` lists what it parsed, and `GET /v1/workloads` serves the live
+`sparehour serve` loads route YAML from `SPAREHOUR_WORKLOADS` (default `workloads/`);
+`sparehour validate` lists what it parsed, and `GET /v1/workloads` serves the live
 catalog. Bundled routes:
 
 | Workload | Backend | Purpose |
@@ -90,11 +93,11 @@ Python 3.10 or newer is required. Install from these repositories or a
 locally built wheel:
 
 ```bash
-git clone https://github.com/autonomica-xyz/distributed-gpu.git
-cd distributed-gpu
+git clone https://github.com/autonomica-xyz/sparehour.git sparehour
+cd sparehour
 python3 -m venv .venv
 .venv/bin/pip install .
-.venv/bin/dgpu validate
+.venv/bin/sparehour validate
 ```
 
 Install `'.[models]'` when this environment also needs model-pack provisioning
@@ -102,29 +105,56 @@ tools. GPU libraries and model weights are not installed on the controller.
 Workers need the route-specific runtime; `ffprobe` is required for
 `media_probe` validation.
 
+## Upgrading an existing deployment
+
+The rebrand is a coordinated cutover. It does not rename the checkout directory,
+move databases/model caches, restart services, or modify provider resources.
+Drain queued/running work before replacing the controller and worker packages.
+
+- Install `sparehour` and `sparehour-worker` together. Python packages are now
+  `sparehour`, `sparehour_workloads`, and `sparehour_worker`; the old import and
+  executable names are not retained.
+- Use `SPAREHOUR_*` controller/runtime environment variables, including
+  `SPAREHOUR_DB`, `SPAREHOUR_WORKLOADS`, `SPAREHOUR_ARTIFACTS`,
+  `SPAREHOUR_ENDPOINT`, `SPAREHOUR_TOKEN`, and `SPAREHOUR_PUBLIC_URL`.
+  Provider API keys keep their provider-specific names.
+- Install the updated trusted workload/pool definitions
+  (`api_version: sparehour.example/v1alpha1`) and executor paths. Previously
+  admitted jobs retain their executor snapshots: drain them before cutover or
+  resubmit them against the current registry afterward.
+- Fresh credentials use `sph_<token-id>.<secret>`. Reissue scoped tokens with
+  `sparehour token`, update workers and API clients, and sign in again. Custom
+  agent clients must send `X-SPAREHOUR-Lease-Token`.
+- Replace the example units with `sparehour-private.service` /
+  `sparehour-public.service` and `sparehour-controller.env.example`; adjust
+  paths/group ownership to your actual installation before restarting.
+  Rebuild worker images with the new wheel and commands, then update their
+  reviewed image digests. Do not rename a tag and assume an old image contains
+  the new package. Never stop or destroy rented resources just to rename them.
+
 ## Run the controller
 
 ```bash
 umask 077
 mkdir -p state
-.venv/bin/dgpu token --role admin --subject operator \
+.venv/bin/sparehour token --role admin --subject operator \
   --expires-hours 24 > state/operator.token
-.venv/bin/dgpu token --role client --subject example-project \
+.venv/bin/sparehour token --role client --subject example-project \
   --expires-hours 24 > state/client.token
-.venv/bin/dgpu serve --host 127.0.0.1 --port 8088
+.venv/bin/sparehour serve --host 127.0.0.1 --port 8088
 ```
 
-State lives in `./state/` (`DGPU_DB`, `DGPU_ARTIFACTS`). Open
+State lives in `./state/` (`SPAREHOUR_DB`, `SPAREHOUR_ARTIFACTS`). Open
 `http://127.0.0.1:8088/dashboard` and paste the contents of
 `state/operator.token` into the sign-in form. Keep token files private.
-Disable the workbench with `--no-dashboard` or `DGPU_DASHBOARD=0`.
+Disable the workbench with `--no-dashboard` or `SPAREHOUR_DASHBOARD=0`.
 
 From another terminal in the controller checkout, issue an agent token for
 the worker and workloads you want it to serve:
 
 ```bash
 umask 077
-.venv/bin/dgpu token --role agent --subject image-worker \
+.venv/bin/sparehour token --role agent --subject image-worker \
   --scope routes=image-generate --expires-hours 24 > state/worker.token
 ```
 
@@ -154,9 +184,9 @@ input-upload API before job submission.
 ## Connecting real workers
 
 On each GPU host, install the
-[distributed-worker](https://github.com/autonomica-xyz/distributed-worker)
-package (which depends on this one) and run `dworker login` with the
-controller endpoint and a route-scoped agent token, then `dworker doctor` to
+[sparehour-worker](https://github.com/autonomica-xyz/sparehour-worker)
+package (which depends on this one) and run `sparehour-worker login` with the
+controller endpoint and a route-scoped agent token, then `sparehour-worker doctor` to
 see which routes the machine matches. A host must already satisfy a route's
 prerequisites — the executor/plugin installed, verified model packs on disk,
 and any operator-started local model server warm — before advertising its
@@ -167,15 +197,15 @@ capability. Model endpoints such as LibreTranslate or vLLM bind to
 
 - **Split ingress.** Keep the dashboard and provider-keyed deploy API on a
   private listener. For public workers, put a TLS-terminating reverse proxy
-  in front of a second `dgpu serve --no-dashboard` process with no
-  `DGPU_PUBLIC_URL`, and verify the boundary with
+  in front of a second `sparehour serve --no-dashboard` process with no
+  `SPAREHOUR_PUBLIC_URL`, and verify the boundary with
   `scripts/verify_public_ingress.sh` before renting capacity.
 - **Provider keys stay on the controller.** A worker receives only the public
   controller URL, an optional wheel URL, a fixed identity, and a short-lived
   route-scoped agent token — never Vast/Salad credentials.
-- **Deploys are operator actions.** `dgpu plan` is read-only; the workbench's
+- **Deploys are operator actions.** `sparehour plan` is read-only; the workbench's
   provider deploys require explicit confirmation. Unattended autoscaler apply
-  exists but is off unless `DGPU_AUTONOMOUS_APPLY` is deliberately set.
+  exists but is off unless `SPAREHOUR_AUTONOMOUS_APPLY` is deliberately set.
   Lease or token expiry does not stop provider billing; destroy rented
   resources explicitly when they are no longer needed.
 - **No job-selected code.** Executors, images, and models come from routes
@@ -190,6 +220,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md); security reports follow
 ## License
 
 Copyright (C) 2026 Aljaz Ceru. GPL-3.0-or-later — see [LICENSE](LICENSE).
-The companion `dworker` package is MIT-licensed but depends on this
+The companion `sparehour-worker` package is MIT-licensed but depends on this
 GPL-licensed package, which is distributed separately and retains its
 license.

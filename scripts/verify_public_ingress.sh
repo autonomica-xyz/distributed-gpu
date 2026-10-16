@@ -81,7 +81,7 @@ verify_route "resolved route"
 # a different edge. Resolve independently through public DoH and force curl to
 # that address with the original TLS SNI/Host. Activation fails if public DNS
 # cannot be independently checked.
-if [[ "$URL" == https://* && "${DGPU_VERIFY_PUBLIC_DNS:-1}" != 0 ]]; then
+if [[ "$URL" == https://* && "${SPAREHOUR_VERIFY_PUBLIC_DNS:-1}" != 0 ]]; then
   authority=${URL#https://}
   authority=${authority%%/*}
   host=${authority%%:*}

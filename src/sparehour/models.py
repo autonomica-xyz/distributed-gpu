@@ -167,7 +167,7 @@ class RouteSpec(BaseModel):
 class WorkloadSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    api_version: Literal["distributed-gpu.example/v1alpha1"] = "distributed-gpu.example/v1alpha1"
+    api_version: Literal["sparehour.example/v1alpha1"] = "sparehour.example/v1alpha1"
     name: str = Field(pattern=r"^[a-z][a-z0-9-]{1,62}$")
     version: str = Field(min_length=1)
     description: str = ""

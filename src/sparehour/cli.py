@@ -28,10 +28,10 @@ from .store import Store
 UTC = timezone.utc
 
 
-DEFAULT_DB = os.environ.get("DGPU_DB", "./state/control.sqlite3")
-DEFAULT_WORKLOADS = os.environ.get("DGPU_WORKLOADS", "./workloads")
-DEFAULT_ARTIFACTS = os.environ.get("DGPU_ARTIFACTS", "./state/artifacts")
-DEFAULT_POOLS = os.environ.get("DGPU_POOLS", "./pools")
+DEFAULT_DB = os.environ.get("SPAREHOUR_DB", "./state/control.sqlite3")
+DEFAULT_WORKLOADS = os.environ.get("SPAREHOUR_WORKLOADS", "./workloads")
+DEFAULT_ARTIFACTS = os.environ.get("SPAREHOUR_ARTIFACTS", "./state/artifacts")
+DEFAULT_POOLS = os.environ.get("SPAREHOUR_POOLS", "./pools")
 
 
 def _orchestrator(args: argparse.Namespace) -> Orchestrator:
@@ -52,7 +52,7 @@ def _token(args: argparse.Namespace) -> str:
         return str(args.token).strip()
     if getattr(args, "token_file", None):
         return Path(args.token_file).read_text(encoding="utf-8").strip()
-    return os.environ.get("DGPU_TOKEN", "").strip()
+    return os.environ.get("SPAREHOUR_TOKEN", "").strip()
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -69,7 +69,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     orchestrator = _orchestrator(args)
     # Provider deploys are only offered when workers have a URL they can
     # actually reach back on; without it the endpoints stay unmounted.
-    public_url = os.environ.get("DGPU_PUBLIC_URL", "").strip()
+    public_url = os.environ.get("SPAREHOUR_PUBLIC_URL", "").strip()
     deployment_service = None
     if public_url:
         deployment_service = DeploymentService(
@@ -78,7 +78,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
             drivers=build_drivers_from_env(),
             pools_directory=args.pools,
             public_controller_url=public_url,
-            wheel_url=os.environ.get("DGPU_WHEEL_URL", "").strip() or None,
+            wheel_url=os.environ.get("SPAREHOUR_WHEEL_URL", "").strip() or None,
         )
     app = create_app(
         orchestrator,
@@ -87,15 +87,15 @@ def cmd_serve(args: argparse.Namespace) -> int:
         deployment_service=deployment_service,
         enable_dashboard=args.dashboard,
         deployment_reconcile_seconds=(
-            float(os.environ.get("DGPU_DEPLOYMENT_RECONCILE_SECONDS", "15"))
+            float(os.environ.get("SPAREHOUR_DEPLOYMENT_RECONCILE_SECONDS", "15"))
             if deployment_service is not None
             else None
         ),
         scaling_evaluate_seconds=(
-            float(os.environ.get("DGPU_SCALING_EVALUATE_SECONDS", "60"))
+            float(os.environ.get("SPAREHOUR_SCALING_EVALUATE_SECONDS", "60"))
             if deployment_service is not None else None
         ),
-        autonomous_apply=os.environ.get("DGPU_AUTONOMOUS_APPLY", "").lower() in {"1", "true", "yes"},
+        autonomous_apply=os.environ.get("SPAREHOUR_AUTONOMOUS_APPLY", "").lower() in {"1", "true", "yes"},
     )
     uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
     return 0
@@ -239,7 +239,7 @@ def cmd_agent_inventory(args: argparse.Namespace) -> int:
 def cmd_agent_run(args: argparse.Namespace) -> int:
     token = _token(args)
     if not token:
-        raise ValueError("agent token is required via --token, --token-file, or DGPU_TOKEN")
+        raise ValueError("agent token is required via --token, --token-file, or SPAREHOUR_TOKEN")
     slots = _agent_slots(args)
     Path(args.workdir).mkdir(parents=True, exist_ok=True)
     disk = shutil.disk_usage(args.workdir)
@@ -343,7 +343,7 @@ def add_agent_args(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="dgpu", description=__doc__)
+    parser = argparse.ArgumentParser(prog="sparehour", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     validate = sub.add_parser("validate", help="validate and list workload definitions")
@@ -361,7 +361,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument(
         "--dashboard",
         action=argparse.BooleanOptionalAction,
-        default=os.environ.get("DGPU_DASHBOARD", "1").lower() not in {"0", "false", "no"},
+        default=os.environ.get("SPAREHOUR_DASHBOARD", "1").lower() not in {"0", "false", "no"},
         help="serve the operator workbench UI at /dashboard (default: on)",
     )
     serve.add_argument("--host", default="127.0.0.1")
@@ -434,13 +434,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     agent = sub.add_parser("agent", help="register this host and execute jobs")
     add_agent_args(agent)
-    agent.add_argument("--endpoint", default=os.environ.get("DGPU_ENDPOINT", "http://127.0.0.1:8088"))
+    agent.add_argument("--endpoint", default=os.environ.get("SPAREHOUR_ENDPOINT", "http://127.0.0.1:8088"))
     agent.add_argument("--token")
     agent.add_argument("--token-file")
     agent.add_argument("--provider", default="local")
     agent.add_argument("--provider-resource-id")
     agent.add_argument("--label", action="append", default=[])
-    agent.add_argument("--workdir", default="/tmp/distributed-gpu")
+    agent.add_argument("--workdir", default="/tmp/sparehour")
     agent.add_argument("--heartbeat-seconds", type=int, default=15)
     agent.add_argument("--lease-seconds", type=int, default=90)
     agent.add_argument("--poll-seconds", type=float, default=1)

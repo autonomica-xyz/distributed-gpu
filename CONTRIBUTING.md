@@ -1,4 +1,4 @@
-# Contributing to Distributed GPU
+# Contributing to Sparehour
 
 Thank you for your interest in the project. This document covers how to set up a
 development environment, run tests, and prepare changes for review.

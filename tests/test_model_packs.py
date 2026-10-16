@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-model_packs = pytest.importorskip("gpu_orchestrator_workloads.model_packs")
+model_packs = pytest.importorskip("sparehour_workloads.model_packs")
 mp = model_packs
 
 MODEL_ID = "some-org/some-model"

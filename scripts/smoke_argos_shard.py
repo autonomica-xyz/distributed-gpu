@@ -7,7 +7,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from gpu_orchestrator_workloads import argos_translate
+from sparehour_workloads import argos_translate
 
 
 SAMPLES = {
@@ -30,7 +30,7 @@ def main() -> None:
     root = Path("/opt/models")
     results = []
     argos_translate._RUNTIMES.clear()
-    with tempfile.TemporaryDirectory(prefix="dgpu-shard-smoke-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="sparehour-shard-smoke-") as temporary:
         work = Path(temporary)
         for model_dir in sorted(path for path in root.iterdir() if path.is_dir()):
             manifest = json.loads((model_dir / "manifest.json").read_text(encoding="utf-8"))

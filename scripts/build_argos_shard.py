@@ -7,7 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
-from gpu_orchestrator_workloads.argos_pack import build_model_pack_from_lock
+from sparehour_workloads.argos_pack import build_model_pack_from_lock
 
 
 def main() -> None:

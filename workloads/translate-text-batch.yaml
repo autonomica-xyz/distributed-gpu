@@ -1,4 +1,4 @@
-api_version: distributed-gpu.example/v1alpha1
+api_version: sparehour.example/v1alpha1
 name: translate-text-batch
 version: "1"
 description: >
@@ -73,7 +73,7 @@ routes:
       min_disk_mb: 30720
     executor:
       type: plugin
-      handler: gpu_orchestrator_workloads.libretranslate:LibreTranslateBatchExecutor
+      handler: sparehour_workloads.libretranslate:LibreTranslateBatchExecutor
       timeout_seconds: 600
       environment:
         LIBRETRANSLATE_ENDPOINT: http://127.0.0.1:5001/translate

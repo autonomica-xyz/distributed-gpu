@@ -34,7 +34,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from gpu_orchestrator.agent import ExecutionError
+from sparehour.agent import ExecutionError
 
 
 DEFAULT_PARAKEET_MODEL_ID = "nvidia/parakeet-tdt-0.6b-v3"
@@ -894,7 +894,7 @@ def _verify_pack(
             "model_load_failed", f"model pack directory {directory} is missing: {exc}"
         ) from exc
     try:
-        from gpu_orchestrator_workloads.model_packs import verify_hf_pack
+        from sparehour_workloads.model_packs import verify_hf_pack
     except ImportError as exc:
         raise ExecutionError(
             "executor_unavailable", "model pack verification module is unavailable"

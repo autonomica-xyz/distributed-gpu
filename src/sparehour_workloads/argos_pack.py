@@ -80,7 +80,7 @@ def build_model_pack_from_lock(
 def _download(url: str, destination: Path) -> None:
     if not url.startswith("https://"):
         raise ValueError("model URL must use HTTPS")
-    request = urllib.request.Request(url, headers={"User-Agent": "distributed-gpu/0.1"})
+    request = urllib.request.Request(url, headers={"User-Agent": "sparehour/0.1"})
     total = 0
     with urllib.request.urlopen(request, timeout=120) as response, destination.open("wb") as output:
         while chunk := response.read(1024 * 1024):

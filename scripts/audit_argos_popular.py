@@ -37,7 +37,7 @@ def _download_and_audit(row: dict[str, Any], cache: Path) -> dict[str, Any]:
     digest = hashlib.sha256()
     total = 0
     if not archive.is_file() or archive.stat().st_size == 0:
-        request = urllib.request.Request(url, headers={"User-Agent": "distributed-gpu/0.1"})
+        request = urllib.request.Request(url, headers={"User-Agent": "sparehour/0.1"})
         with urllib.request.urlopen(request, timeout=180) as response, archive.open("wb") as output:
             while chunk := response.read(1024 * 1024):
                 total += len(chunk)

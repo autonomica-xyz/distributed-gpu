@@ -16,7 +16,7 @@ from collections import OrderedDict
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from gpu_orchestrator.agent import ExecutionError
+from sparehour.agent import ExecutionError
 
 
 _MAX_TOTAL_CHARACTERS = 8 * 1024 * 1024
@@ -60,7 +60,7 @@ class ArgosTranslateExecutor:
         source_language = environment["ARGOS_SOURCE_LANGUAGE"]
         target_language = environment["ARGOS_TARGET_LANGUAGE"]
         configured_device = environment.get("ARGOS_DEVICE", "cuda")
-        device = os.getenv("DGPU_TRANSLATE_DEVICE_OVERRIDE", configured_device)
+        device = os.getenv("SPAREHOUR_TRANSLATE_DEVICE_OVERRIDE", configured_device)
         if device not in {"cpu", "cuda"}:
             raise ExecutionError("executor_contract_invalid", f"invalid device {device!r}")
         compute_type = environment[

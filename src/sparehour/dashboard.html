@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>sparehour</title>
+<style>
+  :root {
+    --font: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --radius: 12px; --radius-sm: 4px;
+    color-scheme: dark;
+    --bg: #07080a; --surface: #0e1014; --raised: #13161b;
+    --line: rgba(255,255,255,.08); --line-2: rgba(255,255,255,.14);
+    --text: #ece8df; --text-2: #b4bac4; --text-3: #6d737d;
+    --accent: #c8f542; --accent-ink: #0a0c08; --accent-soft: rgba(200,245,66,.12);
+    --ok: #56e39f; --ok-soft: rgba(86,227,159,.12);
+    --bad: #ff5c5c; --bad-soft: rgba(255,92,92,.12);
+    --shadow: 0 40px 80px rgba(0,0,0,.5);
+    --primary-bg: #c8f542; --primary-fg: #0a0c08;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background:
+      radial-gradient(640px 420px at 32% -6%, rgba(200,245,66,.055), transparent 70%),
+      var(--bg) fixed;
+    color: var(--text);
+    font: 14px/1.5 var(--font); letter-spacing: -0.004em;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection { background: var(--accent-soft); }
+  a { color: inherit; }
+  a:hover { color: var(--accent); }
+  code, .mono { font-family: var(--mono); font-size: .92em; }
+  .tnum, .num { font-variant-numeric: tabular-nums; }
+  .muted { color: var(--text-2); }
+  .faint { color: var(--text-3); }
+  .hidden { display: none !important; }
+
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-3); border: 3px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .icon { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ---------- Mark ---------- */
+  .mark { width: 20px; height: 20px; flex: none; display: block; }
+  .mark .ring { fill: none; stroke: currentColor; stroke-width: 1.8; }
+  .mark .hour { fill: var(--accent); }
+
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; letter-spacing: -0.015em; font-size: 15px; white-space: nowrap; }
+
+  /* ---------- Top bar ---------- */
+  .topbar { position: sticky; top: 0; z-index: 30; border-bottom: 1px solid rgba(255,255,255,.05); background: rgba(7,8,10,.88); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  .topbar .inner { max-width: 1120px; margin: 0 auto; padding: 0 32px; height: 56px; display: flex; align-items: center; gap: 28px; }
+  .topbar nav { display: flex; gap: 22px; height: 100%; }
+  .topbar nav button {
+    display: flex; align-items: center; border: 0; background: transparent; padding: 0;
+    color: var(--text-2); font: 400 13.5px var(--font); cursor: pointer;
+    border-bottom: 1.5px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s;
+  }
+  .topbar nav button:hover { color: var(--text); }
+  .topbar nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+  .topbar .spacer { flex: 1; }
+  .who { font-size: 13px; color: var(--text-2); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+
+  /* ---------- Page ---------- */
+  .page { max-width: 1120px; margin: 0 auto; padding: 40px 32px 120px; }
+  .page-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
+  .page-head p { margin: 6px 0 0; color: var(--text-2); }
+  .page-head .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  h1.title { font-size: 26px; font-weight: 600; letter-spacing: -0.025em; margin: 0; line-height: 1.2; }
+  .section { margin-top: 44px; }
+  .section-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .section-head h2 { font-size: 14px; font-weight: 600; margin: 0; letter-spacing: -0.005em; }
+  .section-head .hint, .hint { font-size: 13px; color: var(--text-3); }
+  .section-head .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .sub { display: block; font-size: 12.5px; color: var(--text-3); margin-top: 1px; }
+
+  /* ---------- Surfaces ---------- */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+  .card.pad { padding: 20px 22px; }
+  .cols { display: grid; grid-template-columns: 1.35fr 1fr; gap: 32px; align-items: start; }
+
+  /* ---------- Metrics ---------- */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+  .metric { padding: 18px 22px 20px; border-left: 1px solid var(--line); }
+  .metric:first-child { border-left: 0; }
+  .metric .label { font-size: 12.5px; color: var(--text-2); }
+  .metric .value { font-size: 28px; font-weight: 500; letter-spacing: -0.02em; margin-top: 6px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .metric .value small { font-size: 15px; color: var(--text-3); font-weight: 400; letter-spacing: 0; }
+  .metric .hint { font-size: 12.5px; color: var(--text-3); margin-top: 6px; }
+  .metric.alert .value { color: var(--bad); }
+
+  /* ---------- Fleet summary ---------- */
+  .fleet-sum { padding: 22px; }
+  .fleet-sum .big { font-size: 15px; margin-bottom: 14px; }
+  .fleet-sum .big b { font-weight: 600; }
+  .fleet-sum .big b:first-child { color: var(--accent); }
+  .breakdown { display: grid; grid-template-columns: 110px 1fr; gap: 10px 14px; font-size: 13px; margin: 22px 0 0; padding-top: 18px; border-top: 1px solid var(--line); }
+  .breakdown dt { color: var(--text-3); }
+  .breakdown dd { margin: 0; }
+
+  /* ---------- Status ---------- */
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; background: var(--text-3); }
+  .dot.running { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .dot.ok { background: var(--ok); }
+  .dot.bad { background: var(--bad); }
+  .dot.pending { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
+  .dot.off { background: var(--line-2); }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); white-space: nowrap; }
+  .status.running { color: var(--text); }
+  .status.bad { color: var(--bad); }
+  .status .extra { color: var(--text-3); }
+
+  .slotchips { display: flex; gap: 5px; flex-wrap: wrap; }
+  .slotchip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); padding: 3px 9px 3px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--raised); }
+
+  .tag { display: inline-flex; align-items: center; font: 12px var(--mono); color: var(--text-2); background: var(--raised); border: 1px solid var(--line); border-radius: 5px; padding: 1px 7px; white-space: nowrap; }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+
+  /* ---------- Tables ---------- */
+  .scrollx { overflow-x: auto; }
+  .table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .table th { text-align: left; font-weight: 500; font-size: 12.5px; color: var(--text-3); padding: 11px 18px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .table td { padding: 13px 18px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .table tr:last-child td { border-bottom: 0; }
+  .table tbody tr { transition: background .12s; }
+  .table.click tbody tr, .table tbody tr[data-job] { cursor: pointer; }
+  .table tbody tr:hover { background: var(--raised); }
+  .table .num { text-align: right; }
+  .row-slot td:first-child { padding-left: 34px; color: var(--text-2); }
+
+  /* ---------- Forms ---------- */
+  .input, input, select, textarea {
+    min-height: 34px; border-radius: var(--radius-sm); border: 1px solid var(--line-2);
+    background: var(--surface); color: var(--text); font: 13.5px var(--font);
+    padding: 0 12px; outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  input[type=checkbox] { min-height: 0; padding: 0; }
+  input[type=number] { max-width: 140px; }
+  textarea { padding: 9px 12px; min-width: 100%; resize: vertical; font-family: var(--mono); font-size: 12.5px; }
+  input:focus, select:focus, textarea:focus { border-color: var(--text-3); box-shadow: 0 0 0 3px var(--accent-soft); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .field { display: grid; gap: 6px; margin-bottom: 16px; }
+  .field label { font-size: 13px; font-weight: 500; }
+  .field label .req { color: var(--bad); }
+  .field .help, .field .hint { font-size: 12.5px; color: var(--text-3); }
+
+  /* ---------- Buttons ---------- */
+  .btn { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 13px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); background: var(--surface); color: var(--text); font: 500 13px var(--font); cursor: pointer; transition: background .15s, border-color .15s, opacity .15s; white-space: nowrap; }
+  .btn:hover { background: var(--raised); border-color: var(--text-3); }
+  .btn.primary { background: var(--primary-bg); color: var(--primary-fg); border-color: var(--primary-bg); }
+  .btn.primary:hover { opacity: 1; filter: brightness(1.1); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+  .btn.ghost:hover { color: var(--text); background: var(--raised); }
+  .btn.danger { color: var(--bad); }
+  .btn.lg { min-height: 38px; padding: 0 18px; font-size: 14px; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn .icon { width: 15px; height: 15px; }
+
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .toolbar .grow { flex: 1; }
+  .toolbar label.sub { margin: 0; }
+
+  .err { color: var(--bad); font-size: 12.5px; margin-top: 8px; }
+  .empty { color: var(--text-3); padding: 40px; text-align: center; font-size: 13px; }
+  .stale-note { padding: 9px 18px; font-size: 12.5px; color: var(--text-2); border-bottom: 1px solid var(--line); background: var(--bad-soft); }
+  .spin::after { content: ""; display: inline-block; width: 11px; height: 11px; border: 2px solid var(--text-3); border-top-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; margin-left: 8px; vertical-align: -1px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* ---------- Usage bar ---------- */
+  .bar { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: var(--line); gap: 2px; }
+  .bar span { display: block; height: 100%; }
+  .bar .b-run { background: var(--accent); }
+  .bar .b-ok { background: var(--ok); }
+  .bar .b-idle { background: var(--line-2); }
+  .legend { display: flex; gap: 18px; font-size: 12.5px; color: var(--text-2); margin-top: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+
+  /* ---------- Activity feed ---------- */
+  .feed { list-style: none; margin: 0; padding: 0; }
+  .feed li { display: grid; grid-template-columns: 72px 14px 1fr; gap: 10px; align-items: baseline; padding: 9px 0; font-size: 13.5px; border-bottom: 1px solid var(--line); }
+  .feed li:last-child { border-bottom: 0; }
+  .feed time { color: var(--text-3); font: 12px var(--mono); }
+  .feed .dot { transform: translateY(-1px); }
+  .feed .meta { color: var(--text-3); }
+  details.raw summary { cursor: pointer; color: var(--text-3); font-size: 12px; }
+  details.raw summary:hover { color: var(--text-2); }
+
+  /* ---------- Code ---------- */
+  pre.code, pre.box { margin: 0; font: 12.5px/1.6 var(--mono); background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px; overflow: auto; color: var(--text-2); }
+
+  /* ---------- Sign in ---------- */
+  .signin { min-height: 100vh; display: grid; place-items: center; padding: 40px; }
+  .signin .card { width: min(400px, calc(100vw - 48px)); min-width: 0; padding: 34px 32px 28px; }
+  .signin h1 { font-size: 21px; font-weight: 600; letter-spacing: -0.02em; margin: 26px 0 6px; }
+  .signin p { color: var(--text-2); margin: 0 0 26px; font-size: 13.5px; }
+  .signin .input { width: 100%; }
+  .signin .fine { font-size: 12.5px; color: var(--text-3); margin-top: 18px; text-align: center; }
+
+  /* ---------- Overlay & dialogs ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+    background: rgba(7,8,10,.6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    animation: fade .2s ease;
+  }
+  .dialog {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 26px; width: 420px; max-width: 92vw;
+    max-height: calc(100vh - 48px); overflow-y: auto;
+    animation: pop .24s cubic-bezier(.2,.8,.2,1);
+  }
+  .dialog h3 { font-size: 16px; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 4px; }
+  .dialog p { color: var(--text-2); margin: 0 0 4px; font-size: 13px; }
+  .dialog .row { display: flex; gap: 10px; margin-top: 18px; }
+  .dialog .row .btn { flex: 1; justify-content: center; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pop { from { transform: scale(.96) translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+  details summary { cursor: pointer; color: var(--text-2); }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+
+  /* ---------- Drawer (job detail) ---------- */
+  .scrim { position: fixed; inset: 0; background: rgba(7,8,10,.55); backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 40; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); background: var(--surface); border-left: 1px solid var(--line); box-shadow: var(--shadow); transform: translateX(100%); visibility: hidden; pointer-events: none; transition: transform .28s cubic-bezier(.2,.8,.2,1), visibility .28s; z-index: 41; overflow: auto; }
+  .drawer.open { transform: none; visibility: visible; pointer-events: auto; }
+  .drawer header { position: sticky; top: 0; background: var(--surface); padding: 22px 28px 18px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: flex-start; z-index: 1; }
+  .drawer header .title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .drawer .body { padding: 24px 28px 40px; }
+  .drawer h4 { font-size: 13px; font-weight: 600; margin: 28px 0 12px; }
+  .kv { display: grid; grid-template-columns: 120px 1fr; gap: 10px 16px; font-size: 13.5px; margin: 0; }
+  .kv dt { color: var(--text-3); }
+  .kv dd { margin: 0; word-break: break-word; }
+  .steps { list-style: none; padding: 0; margin: 0; position: relative; }
+  .steps li { display: grid; grid-template-columns: 14px 1fr auto; gap: 12px; align-items: baseline; padding: 6px 0; font-size: 13.5px; position: relative; }
+  .steps li::before { content: ""; position: absolute; left: 3.5px; top: 20px; bottom: -8px; width: 1px; background: var(--line-2); }
+  .steps li:last-child::before { display: none; }
+  .steps time { font: 12px var(--mono); color: var(--text-3); }
+  .output { display: flex; gap: 14px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 10px; }
+
+  /* ---------- Workload cards ---------- */
+  .wcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
+  .wcard { padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+  .wcard h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .wcard p { margin: 4px 0 0; color: var(--text-2); font-size: 13px; }
+  .routes { border-top: 1px solid var(--line); }
+  .route { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .route > span:last-child { display: block; margin-top: 2px; font-size: 12.5px; }
+  .route:last-child { border-bottom: 0; }
+  .wcard footer { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text-3); }
+
+  .footer { color: var(--text-3); font-size: 12px; text-align: center; padding: 10px 20px 30px; }
+
+  @media (max-width: 860px) {
+    .topbar .inner { padding: 10px 14px 0; gap: 12px; height: auto; min-height: 56px; flex-wrap: wrap; }
+    .topbar nav { order: 2; flex: 0 0 100%; height: 42px; gap: 22px; overflow-x: auto; }
+    .topbar nav button { flex-shrink: 0; white-space: nowrap; }
+    .topbar .who { display: none; }
+    .signin { padding: 24px; }
+    .page { padding: 24px 14px 80px; }
+    .cols { grid-template-columns: 1fr; }
+    .drawer { width: 100vw; }
+    .feed li { grid-template-columns: 60px 14px 1fr; }
+    .cols > div, .fleet-sum { min-width: 0; }
+    .breakdown dd, .feed li > span:last-child { overflow-wrap: anywhere; min-width: 0; }
+    .drawer header { padding: 18px; gap: 8px; flex-wrap: wrap; }
+    .drawer header > div { min-width: 0; }
+    #d-sub { overflow-wrap: anywhere; }
+    .drawer .body { padding: 20px 18px 32px; }
+    .kv { grid-template-columns: 95px minmax(0,1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar hidden" id="topbar">
+    <div class="inner">
+      <div class="brand"><svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><circle class="ring" cx="12" cy="12" r="9"/><path class="hour" d="M12 12V3a9 9 0 0 1 4.5 1.206Z"/></svg>sparehour</div>
+      <nav id="tabs" aria-label="Sections">
+        <button data-tab="overview" class="active">Overview</button>
+        <button data-tab="fleet">Fleet</button>
+        <button data-tab="queues">Queues</button>
+        <button data-tab="jobs">Jobs</button>
+        <button data-tab="workloads">Workloads</button>
+        <button data-tab="admin" id="tab-admin" class="hidden">Admin</button>
+      </nav>
+      <div class="spacer"></div>
+      <div class="who" id="who"></div>
+      <button class="btn ghost" id="refresh-btn" title="Refresh now" aria-label="Refresh"><svg class="icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+      <button class="btn ghost" id="disconnect-btn">Sign out</button>
+    </div>
+  </header>
+
+  <main id="main" class="page hidden" tabindex="-1"></main>
+  <div class="footer hidden" id="autofoot"></div>
+</div>
+
+<!-- Sign in -->
+<div class="signin" id="connect">
+  <form class="card" id="connect-form">
+    <div class="brand"><svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><circle class="ring" cx="12" cy="12" r="9"/><path class="hour" d="M12 12V3a9 9 0 0 1 4.5 1.206Z"/></svg>sparehour</div>
+    <h1>Sign in</h1>
+    <p>Use an access token issued by your operator.</p>
+    <div class="field"><label for="c-endpoint">Control plane</label><input class="input" id="c-endpoint" placeholder="https://sparehour.example.com" /></div>
+    <div class="field"><label for="c-token">Access token</label><input class="input" id="c-token" type="password" placeholder="sph_…" autocomplete="off" /><span class="help">Kept only in this browser tab.</span></div>
+    <div class="err" id="c-err"></div>
+    <button type="submit" class="btn primary lg" style="width:100%;justify-content:center;margin-top:6px">Continue</button>
+  </form>
+</div>
+
+<!-- Job detail drawer -->
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Job details"></aside>
+
+<!-- Generic modal -->
+<div class="overlay hidden" id="modal-host">
+  <div class="dialog" id="modal-dialog" role="dialog" aria-modal="true" style="width:560px"></div>
+</div>
+
+<script>
+"use strict";
+const STORE_KEY = "sph.workbench.v1";
+const REFRESH_MS = 5000;
+const JOBS_PAGE_SIZE = 50;
+const OFFERS_PAGE_SIZE = 10;
+const QUEUES_PAGE_SIZE = 20;
+let state = { endpoint: "", token: "", role: "", subject: "", projectId: null,
+              tab: "overview", jobsFilter: {state:"", workload:"", gpu:"", q:""}, workloads: [], overview: null,
+              jobsPage: 0, queuesPage: 0, queueWindow: 24, queues: [], gpuSlots: [], capacity: [], capacityPages: {} };
+let timer = null;
+let jobsFetchGeneration = 0;
+let lastFocus = null;
+const $ = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+function el(tag, props={}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k,v] of Object.entries(props)) {
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k === "html") n.innerHTML = v;
+    else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
+    else if (k === "dataset") Object.assign(n.dataset, v);
+    else n.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    n.appendChild(typeof kid === "string" ? document.createTextNode(kid) : kid);
+  }
+  return n;
+}
+
+async function api(path, opts={}) {
+  const headers = Object.assign({ "Authorization": "Bearer " + state.token }, opts.headers || {});
+  if (opts.body !== undefined && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+  let res;
+  try {
+    res = await fetch(state.endpoint + path, { method: opts.method || "GET", headers, body: opts.body });
+  } catch (e) {
+    const err = new Error("Network error reaching " + state.endpoint + " — " + e.message);
+    err.status = 0; throw err;
+  }
+  if (res.status === 204) return { ok: true, status: 204, json: null };
+  const ctype = res.headers.get("content-type") || "";
+  const body = ctype.includes("json") ? await res.json() : await res.text();
+  if (!res.ok) {
+    const err = new Error((body && body.detail) || (body && body.error) || ("HTTP " + res.status));
+    err.status = res.status; err.body = body; throw err;
+  }
+  return { ok: true, status: res.status, json: body };
+}
+async function apiRaw(path) {
+  const res = await fetch(state.endpoint + path, { headers: { "Authorization": "Bearer " + state.token } });
+  if (!res.ok) throw new Error("download failed: HTTP " + res.status);
+  return res;
+}
+
+function short(s, n=10) { return s && s.length > n ? s.slice(0,n) + "…" : (s||""); }
+function parseTs(iso) { return iso ? new Date(iso + (iso.endsWith("Z") || iso.includes("+") ? "" : "Z")) : null; }
+function clockTime(iso) { const d = parseTs(iso); return d ? d.toLocaleTimeString([], {hour12:false}) : "—"; }
+function relTime(iso) {
+  const then = parseTs(iso);
+  if (!then) return "—";
+  const diff = (Date.now() - then.getTime())/1000;
+  if (diff < 0) return "just now";
+  if (diff < 60) return Math.floor(diff) + "s ago";
+  if (diff < 3600) return Math.floor(diff/60) + "m ago";
+  if (diff < 86400) return Math.floor(diff/3600) + "h ago";
+  return Math.floor(diff/86400) + "d ago";
+}
+function dur(ms) {
+  if (ms == null) return "—";
+  if (ms < 1000) return ms + "ms";
+  const s = ms/1000;
+  if (s < 60) return s.toFixed(1) + "s";
+  const m = s/60;
+  if (m < 60) return m.toFixed(1) + "m";
+  return (m/60).toFixed(1) + "h";
+}
+function age(iso) { return iso ? relTime(iso) : "—"; }
+function esc(s) { return String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ---- Status presentation (dot + label) ---- */
+const JOB_STATUS = {
+  "pending":     { dot: "pending", label: "Queued" },
+  "leased":      { dot: "running", label: "Leased" },
+  "running":     { dot: "running", label: "Running" },
+  "succeeded":   { dot: "ok",      label: "Succeeded" },
+  "dead-letter": { dot: "bad",     label: "Failed" },
+  "cancelled":   { dot: "off",     label: "Cancelled" },
+};
+const EVENT_STATUS = {
+  "submitted":        { dot: "pending" },
+  "leased":           { dot: "running" },
+  "running":          { dot: "running" },
+  "succeeded":        { dot: "ok" },
+  "released":         { dot: "pending" },
+  "failed":           { dot: "bad" },
+  "dead-letter":      { dot: "bad" },
+  "lease-expired":    { dot: "bad" },
+  "cancel-requested": { dot: "pending" },
+  "cancelled":        { dot: "off" },
+};
+function statusHtml(s, label, extra) {
+  const st = JOB_STATUS[s] || { dot: "off", label: s };
+  const cls = st.dot === "bad" ? "bad" : st.dot === "running" ? "running" : "";
+  return `<span class="status ${cls}"><span class="dot ${st.dot}"></span>${esc(label || st.label)}${extra?` <span class="extra">${extra}</span>`:""}</span>`;
+}
+function dotForEvent(t) { return (EVENT_STATUS[t] || {}).dot || "off"; }
+
+/* ---------------- Connect ---------------- */
+function loadCreds() { try { return JSON.parse(sessionStorage.getItem(STORE_KEY) || "{}"); } catch { return {}; } }
+function saveCreds(c) { sessionStorage.setItem(STORE_KEY, JSON.stringify(c)); }
+function clearCreds() { sessionStorage.removeItem(STORE_KEY); }
+
+async function doConnect(endpoint, token) {
+  state.endpoint = (endpoint||window.location.origin).replace(/\/+$/,"");
+  state.token = token;
+  const { json } = await api("/v1/dashboard/overview");
+  state.role = json.role; state.subject = json.subject; state.projectId = json.project_id;
+  state.overview = json;
+  saveCreds({ endpoint: state.endpoint, token });
+  startUi();
+}
+function disconnect() {
+  clearCreds(); if (timer) clearInterval(timer); timer=null;
+  state = { endpoint:"", token:"", role:"", subject:"", projectId:null, tab:"overview",
+            jobsFilter:{state:"",workload:"",gpu:"",q:""}, jobsPage:0, queuesPage:0, queueWindow:24, queues:[], workloads:[], gpuSlots:[], capacity:[], capacityPages:{}, overview:null };
+  closeDrawer();
+  closeModal();
+  $("#connect").classList.remove("hidden");
+  $("#topbar").classList.add("hidden"); $("#main").classList.add("hidden");
+  $("#autofoot").classList.add("hidden");
+  $("#c-token").value = "";
+  $("#c-token").focus();
+}
+function startUi() {
+  $("#connect").classList.add("hidden");
+  $("#topbar").classList.remove("hidden");
+  $("#main").classList.remove("hidden");
+  $("#autofoot").classList.remove("hidden");
+  renderWho();
+  $("#tab-admin").classList.toggle("hidden", !state.overview.can_administer);
+  showTab(state.tab || "overview");
+  if (timer) clearInterval(timer);
+  timer = setInterval(refreshQuiet, REFRESH_MS);
+  loadWorkloads();
+}
+function renderWho() {
+  const next = `<span class="dot ok" title="Connected"></span><b>${esc(state.subject||"?")}</b> <span class="tag">${esc(state.role)}</span>`;
+  if ($("#who").innerHTML !== next) $("#who").innerHTML = next;
+}
+
+/* ---------------- Tabs ---------------- */
+function showTab(tab) {
+  state.tab = tab;
+  $$("#tabs button").forEach(b => { const on=b.dataset.tab===tab; b.classList.toggle("active", on); if (on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
+  window.scrollTo(0, 0);
+  if (tab === "overview") renderOverview();
+  else if (tab === "fleet") renderFleet();
+  else if (tab === "queues") renderQueues();
+  else if (tab === "jobs") renderJobs();
+  else if (tab === "workloads") renderWorkloadsTab();
+  else if (tab === "admin") renderAdmin();
+}
+
+/* ---------------- Overview ---------------- */
+function pageHead(title, sub, actionsHtml) {
+  return `<div class="page-head"><div><h1 class="title">${title}</h1>${sub?`<p>${sub}</p>`:""}</div><div class="actions">${actionsHtml||""}</div></div>`;
+}
+function slotBuckets(f) {
+  const s = f.slots_by_state||{};
+  const busy=s.busy||0, ready=s.ready||0;
+  const total=f.slots_total ?? (busy+ready+(s.offline||0)+(s.draining||0));
+  const other=Math.max(0,total-busy-ready);
+  return {busy, ready, other, total};
+}
+function overviewSub(o) {
+  const b = slotBuckets(o.fleet||{});
+  const active = (state.queues||[]).filter(q=>q.backlog_jobs>0);
+  const eta = active.length && active.every(q=>q.eta_seconds!=null)
+    ? ` · backlog drains in about ${dur(Math.max(...active.map(q=>q.eta_seconds))*1000)}` : "";
+  return `${b.busy} of ${b.total} slots busy${eta}`;
+}
+function metricCard(label, value, hint, alert, id) {
+  return `<div class="metric${alert?" alert":""}" ${id?`data-card="${id}"`:""}><div class="label">${label}</div><div class="value">${value}</div><div class="hint">${hint||""}</div></div>`;
+}
+function overviewMetrics(o) {
+  const j = o.jobs_by_state||{};
+  const units = (o.backlog||[]).filter(r=>r.state==="pending").reduce((a,r)=>a+(r.units||0),0);
+  const running = (j.running||0)+(j.leased||0);
+  const attention = j["dead-letter"]||0;
+  return [
+    metricCard("Running", running, "leased or executing", false, "running"),
+    metricCard("Queued", j.pending||0, o.can_administer ? fmtUnits(units) + " work units" : "in your project", false, "queued"),
+    metricCard("Succeeded", j.succeeded||0, "all time", false, "succeeded"),
+    metricCard("Need attention", attention, "failed after retries", attention>0, "attention"),
+  ].join("");
+}
+function capacityHtml(f) {
+  const b = slotBuckets(f);
+  const pct = v => (v/Math.max(1,b.total)*100).toFixed(1)+"%";
+  const fmt = o => Object.entries(o||{}).map(([k,v])=>`${esc(k)} × ${v}`).join(" · ") || "—";
+  return `<div class="big"><b>${b.busy}</b> busy · <b>${b.ready}</b> ready · <b>${b.other}</b> offline or draining</div>
+    <div class="bar" role="img" aria-label="${b.busy} of ${b.total} slots busy"><span class="b-run" style="width:${pct(b.busy)}"></span><span class="b-idle" style="width:${pct(b.ready+b.other)}"></span></div>
+    <div class="legend"><span><span class="dot running"></span>Busy</span><span><span class="dot pending"></span>Ready</span><span><span class="dot off"></span>Offline</span></div>
+    <dl class="breakdown">
+      <dt>Providers</dt><dd>${fmt(f.slots_by_provider)}</dd>
+      <dt>Hardware</dt><dd>${fmt(f.slots_by_model)}</dd>
+      <dt>Capabilities</dt><dd>${fmt(f.slots_by_capability)}</dd>
+      <dt>Slot memory</dt><dd class="tnum">${humanGB(f.total_vram_mb||0)} total</dd>
+    </dl>`;
+}
+function combineBacklog(rows) {
+  const map = new Map();
+  for (const r of rows||[]) {
+    const key = r.workload + " " + r.route;
+    let g = map.get(key);
+    if (!g) { g = { workload:r.workload, route:r.route, cost_unit:r.cost_unit, queued:0, running:0, units:0 }; map.set(key,g); }
+    if (r.state === "pending") g.queued += r.jobs; else g.running += r.jobs;
+    g.units += r.units||0;
+  }
+  return [...map.values()];
+}
+function etaFor(workload, route) {
+  const q = (state.queues||[]).find(x => x.workload===workload && x.route===route);
+  if (!q || q.eta_seconds == null) return `<span class="faint">—</span>`;
+  if (q.eta_seconds === 0) return `<span class="faint">empty</span>`;
+  return `<span class="muted">~${dur(Math.round(q.eta_seconds*1000))}</span>`;
+}
+function backlogRowsHtml(rows) {
+  return combineBacklog(rows).map(g => `<tr data-backlog-key="${esc(g.workload)}:${esc(g.route)}">
+    <td>${esc(g.workload)} <span class="faint">/ ${esc(g.route)}</span></td>
+    <td class="num">${g.queued}</td><td class="num">${g.running}</td>
+    <td class="num">${fmtUnits(g.units)} ${esc(g.cost_unit||"")}</td>
+    <td>${etaFor(g.workload, g.route)}</td></tr>`).join("");
+}
+function renderOverview() {
+  const o = state.overview || {}; const f = o.fleet||{};
+  const backlogRows = backlogRowsHtml(o.backlog);
+  $("#main").innerHTML = `
+    ${pageHead("Overview", overviewSub(o), `<button class="btn primary" id="ov-new"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New job</button>`)}
+    <div class="metrics" id="ov-cards">${overviewMetrics(o)}</div>
+    <div class="${o.can_administer ? "cols " : ""}section">
+      ${o.can_administer ? `<div>
+        <div class="section-head"><h2>Backlog</h2><span class="hint">by route</span><div class="actions"><button class="btn ghost" data-goto="queues">View all</button></div></div>
+        <div id="ov-backlog">${backlogRows ? table(["Route","Queued","Running","Units","Drain"], backlogRows) : empty("No queued or running work.")}</div>
+      </div>` : ""}
+      <div>
+        <div class="section-head"><h2>Fleet</h2><div class="actions"><button class="btn ghost" data-goto="fleet">View all</button></div></div>
+        <div class="card fleet-sum" id="ov-capacity">${capacityHtml(f)}</div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><h2>Recent activity</h2></div><div id="ov-recent"><p class="empty">loading…</p></div></div>`;
+  $("#ov-new").addEventListener("click", () => openSubmit());
+  $$("#main button[data-goto]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.goto)));
+  loadRecentInto("#ov-recent");
+  if (o.can_administer) fetchQueuesData().then(refreshOverviewView).catch(()=>{});
+}
+function refreshOverviewView() {
+  if(state.tab!=="overview" || !state.token)return;
+  if(!$("#ov-cards")){ renderOverview(); return; }
+  const o=state.overview||{}, j=o.jobs_by_state||{}, f=o.fleet||{};
+  const units=(o.backlog||[]).filter(r=>r.state==="pending").reduce((a,r)=>a+(r.units||0),0);
+  const attention=j["dead-letter"]||0;
+  const values={
+    running:[(j.running||0)+(j.leased||0),"leased or executing"],
+    queued:[j.pending||0,o.can_administer ? fmtUnits(units)+" work units" : "in your project"],
+    succeeded:[j.succeeded||0,"all time"],
+    attention:[attention,"failed after retries"]
+  };
+  Object.entries(values).forEach(([id,v])=>{const c=$(`[data-card="${id}"]`);if(c){c.querySelector(".value").textContent=v[0];c.querySelector(".hint").textContent=v[1];c.classList.toggle("alert",id==="attention"&&v[0]>0);}});
+  const head=$("#main .page-head p"); if(head) head.textContent=overviewSub(o);
+  const capacity=$("#ov-capacity"), capacityHtmlNext=capacityHtml(f);
+  if(capacity&&capacity.innerHTML!==capacityHtmlNext) capacity.innerHTML=capacityHtmlNext;
+  const backlog=$("#ov-backlog"); if(backlog){
+    const rows=backlogRowsHtml(o.backlog);
+    if(rows) patchTable(backlog,["Route","Queued","Running","Units","Drain"],rows,"data-backlog-key");
+    else if(!backlog.querySelector(".empty")) backlog.innerHTML=empty("No queued or running work.");
+  }
+}
+function humanGB(mb){ return (mb/1024).toFixed(1) + " GB"; }
+function fmtUnits(u){ return Number(u).toFixed(u<10?2:0); }
+function empty(msg){ return `<div class="empty">${msg}</div>`; }
+function table(heads, rowsHtml){ return `<div class="card scrollx"><table class="table"><thead><tr>${heads.map(h=>`<th${h==="Queued"||h==="Running"||h==="Units"?' class="num"':""}>${h}</th>`).join("")}</tr></thead><tbody>${rowsHtml}</tbody></table></div>`; }
+function patchTable(host, heads, rowsHtml, keyAttr) {
+  const stale = host.querySelector(".stale-note");
+  const existing=host.querySelector("table");
+  if(!existing){ host.innerHTML=table(heads,rowsHtml); return; }
+  const scratch=document.createElement("tbody"); scratch.innerHTML=rowsHtml;
+  const body=existing.tBodies[0];
+  const old=new Map(Array.from(body.rows).map((r,i)=>[r.getAttribute(keyAttr)||`old-${i}`,r]));
+  Array.from(scratch.rows).forEach((fresh,i)=>{
+    const key=fresh.getAttribute(keyAttr)||`new-${i}`; const row=old.get(key);
+    if(row){
+      if(row.innerHTML!==fresh.innerHTML) row.innerHTML=fresh.innerHTML;
+      row.className=fresh.className; Array.from(fresh.attributes).forEach(a=>row.setAttribute(a.name,a.value));
+      body.appendChild(row); old.delete(key);
+    } else body.appendChild(fresh);
+  });
+  old.forEach(row=>row.remove());
+  if (stale) stale.remove();
+}
+function noteStale(host, e) {
+  if (!host.querySelector(".stale-note"))
+    host.insertAdjacentHTML("afterbegin", `<div class="stale-note">Last refresh failed (${esc(e.message)}) — showing previous data.</div>`);
+}
+
+/* ---- Human-readable activity, raw detail retained ---- */
+function eventText(e, linkJob=true) {
+  const d = e.detail||{};
+  const job = linkJob===false ? "" : (linkJob==="raw" ? `<span class="mono">${short(e.job_id,12)}</span> ` : `<a data-job="${esc(e.job_id)}" class="mono">${short(e.job_id,12)}</a> `);
+  switch (e.event_type) {
+    case "submitted": return `${job}submitted${e.actor?` by ${esc(e.actor)}`:""}`;
+    case "leased": return `${job}leased to ${esc(e.actor||"a worker")}${d.slot_id?` <span class="meta">· slot ${esc(short(d.slot_id,14))}</span>`:""}`;
+    case "running": return `${job}started on ${esc(e.actor||"a worker")}${d.attempt?` <span class="meta">· attempt ${d.attempt}</span>`:""}`;
+    case "succeeded": return `${job}finished`;
+    case "failed": return `${job}failed${d.error_code?` <span class="meta">· ${esc(d.error_code)}</span>`:""}${d.next_state==="pending"?" <span class=\"meta\">· requeued</span>":""}`;
+    case "dead-letter": return `${job}exhausted retries${d.error_code?` <span class="meta">· ${esc(d.error_code)}</span>`:""}`;
+    case "released": return `${job}released${d.reason?` <span class="meta">· ${esc(d.reason)}</span>`:""}`;
+    case "cancel-requested": return `${job}cancellation requested`;
+    case "cancelled": return `${job}cancelled${e.actor?` <span class="meta">· by ${esc(e.actor)}</span>`:""}`;
+    case "lease-expired": return `${job}worker lease expired${d.next_state==="pending"?" <span class=\"meta\">· requeued</span>":d.next_state==="dead-letter"?" <span class=\"meta\">· dead-lettered</span>":""}`;
+    default: return `${job}${esc(e.event_type)}${e.actor?` <span class="meta">· ${esc(e.actor)}</span>`:""}`;
+  }
+}
+async function loadRecentInto(sel) {
+  try {
+    const { json } = await api("/v1/dashboard/recent?limit=30");
+    const items = json.map(e => {
+      const detail = e.detail && Object.keys(e.detail).length
+        ? `<details class="raw"><summary>detail</summary><pre class="code" style="margin-top:6px">${esc(JSON.stringify(e.detail, null, 2))}</pre></details>` : "";
+      return `<li><time title="${esc(e.created_at)}">${clockTime(e.created_at)}</time><span class="dot ${dotForEvent(e.event_type)}"></span><span>${eventText(e)}${detail}</span></li>`;
+    }).join("");
+    const host = $(sel);
+    if (host) host.innerHTML = items ? `<div class="card" style="padding:6px 22px"><ul class="feed">${items}</ul></div>` : empty("No events yet.");
+    $$(sel + " a[data-job]").forEach(a => a.addEventListener("click", () => openJob(a.dataset.job)));
+  } catch (e) { if ($(sel)) $(sel).innerHTML = errBox(e); }
+}
+
+/* ---------------- Fleet ---------------- */
+async function renderFleet() {
+  let host=$("#fleet-host");
+  if(!host){
+    $("#main").innerHTML=`${pageHead("Fleet", "Current workers and slots")}
+      <div id="fleet-host"><p class="empty">loading…</p></div>
+      <div class="section"><div class="section-head"><h2>Past workers</h2><span class="hint">kept for run history</span></div><div id="fleet-history-host"><p class="empty">loading…</p></div></div>`;
+    host=$("#fleet-host");
+    [host,$("#fleet-history-host")].forEach(node=>node.addEventListener("click",e=>{
+      const job=e.target.closest("a[data-job]"); if(job){openJob(job.dataset.job);return;}
+      const history=e.target.closest("a[data-slot-history]"); if(history){state.jobsFilter.gpu=history.dataset.slotHistory;state.jobsPage=0;showTab("jobs");}
+    }));
+  }
+  let agents = [];
+  try { agents = (await api("/v1/control/agents")).json; }
+  catch (e) {
+    if(!host.querySelector("table")) host.innerHTML=`<div class="card pad">Your token can't list raw fleet detail. Use a <b>controller</b> or <b>admin</b> token to inspect workers and slots. Aggregate capacity is still visible on Overview.</div>`;
+    else noteStale(host, e);
+    return;
+  }
+  const current=agents.filter(a=>!a.historical), history=agents.filter(a=>a.historical);
+  const rowsFor = (items,past) => items.flatMap(a=>{
+    const stateLabel=past?(a.deployment_state||"past"):a.state;
+    const stateDot=past?"off":a.fleet_status==="stale"?"bad":a.state==="ready"?"ok":a.state==="draining"?"pending":"bad";
+    const staleNote=!past&&a.fleet_status==="stale"?` <span class="extra">stale heartbeat</span>`:"";
+    const rows=[`<tr class="row-agent" data-row-key="agent:${esc(a.id)}"><td><b class="mono">${esc(a.id)}</b><span class="sub">${esc(a.hostname||"")}</span></td>
+      <td>${esc(a.provider)}${a.provider_resource_id?`<span class="sub">${esc(a.provider_resource_id)}</span>`:""}</td>
+      <td><span class="status ${stateDot==="bad"?"bad":""}"><span class="dot ${stateDot}"></span>${esc(stateLabel)}</span>${staleNote}</td>
+      <td class="muted">${esc(a.heartbeat_at?relTime(a.heartbeat_at):"—")}</td>
+      <td class="tnum">${a.cpu_cores||"—"}c · ${humanGB(a.ram_mb||0)} · ${humanGB(a.disk_free_mb||0)} free</td>
+      <td><div class="tags">${Object.entries(a.labels||{}).map(([k,v])=>`<span class="tag">${esc(k)}=${esc(v)}</span>`).join("")||"—"}</div></td><td></td></tr>`];
+    a.slots.forEach(s=>rows.push(`<tr class="row-slot" data-row-key="slot:${esc(s.id)}"><td>slot ${s.gpu_index}: <b>${esc(s.model)}</b> <span class="faint">${humanGB(s.vram_mb)}${s.compute_capability?(" · cc "+esc(s.compute_capability)):""}</span></td>
+      <td></td><td><span class="status"><span class="dot ${past?"off":slotDot(a.fleet_status==="stale"?"offline":s.state)}"></span>${past?"historical":a.fleet_status==="stale"?"offline":esc(s.state)}</span></td>
+      <td class="muted">${esc(s.heartbeat_at?relTime(s.heartbeat_at):"—")}</td><td colspan="2"><div class="tags">${(s.capabilities||[]).map(c=>`<span class="tag">${esc(c)}</span>`).join("")}</div></td>
+      <td>${s.active_job_id&&!past?`<a data-job="${esc(s.active_job_id)}" class="mono">${short(s.active_job_id,12)}</a>`:`<a data-slot-history="${esc(s.id)}">view jobs</a>`}</td></tr>`));
+    return rows;
+  }).join("");
+  if(current.length) patchTable(host,["Worker / slot","Provider","Status","Last seen","Resources","Labels / capabilities","Job"],rowsFor(current,false),"data-row-key");
+  else host.innerHTML=empty("No current workers. Past provisioned workers remain below for audit.");
+  const historyHost=$("#fleet-history-host");
+  if(history.length) patchTable(historyHost,["Worker / slot","Provider","Lifecycle","Last seen","Last resources","Labels / capabilities","Run history"],rowsFor(history,true),"data-row-key");
+  else historyHost.innerHTML=empty("No past provisioned workers.");
+  const head=$("#main .page-head p");
+  if(head) head.textContent=`${current.length} worker${current.length===1?"":"s"}, ${current.filter(a=>a.fleet_status==="active").length} online · ${history.length} past`;
+}
+function slotDot(s){ return s==="busy"?"running":s==="ready"?"pending":"off"; }
+
+/* ---------------- Queues ---------------- */
+function renderQueues(){
+  $("#main").innerHTML=`${pageHead("Queues","Throughput and drain time per route",`<label class="sub" for="queue-window">Statistics window</label><select id="queue-window">${[1,6,24,72,168].map(h=>`<option value="${h}" ${state.queueWindow===h?"selected":""}>${h}h</option>`).join("")}</select>`)}
+    <div class="metrics" id="queue-cards"></div>
+    <div class="section"><div id="queues-host"><p class="empty">loading…</p></div><div class="toolbar" id="queues-pager" style="justify-content:flex-end;margin-top:14px"></div></div>`;
+  $("#queue-window").addEventListener("change",e=>{state.queueWindow=Number(e.target.value);state.queuesPage=0;fetchQueues();});
+  $("#queues-host").addEventListener("click",e=>{const a=e.target.closest("a[data-job]");if(a)openJob(a.dataset.job);});
+  fetchQueues();
+}
+async function fetchQueuesData(){
+  state.queues=(await api(`/v1/dashboard/queues?window_hours=${state.queueWindow}`)).json;
+}
+async function fetchQueues(){
+  const host=$("#queues-host");
+  try{
+    await fetchQueuesData();
+    if(host) renderQueueData();
+  }catch(e){
+    if(host){ if(!host.querySelector("table"))host.innerHTML=errBox(e); else noteStale(host,e); }
+  }
+}
+function renderQueueData(){
+  const host=$("#queues-host"); if(!host)return; const queues=state.queues||[];
+  const total=queues.reduce((n,q)=>n+q.backlog_jobs,0), active=queues.filter(q=>q.backlog_jobs>0).length;
+  const workers=new Set(queues.flatMap(q=>q.workers.filter(w=>w.active).map(w=>w.slot_id))).size;
+  const knownEtas=queues.filter(q=>q.backlog_jobs>0&&q.eta_seconds!=null).map(q=>q.eta_seconds);
+  const cards=$("#queue-cards"), cardValues={depth:[total,"pending, leased, or running"],active:[active,`${queues.length} registered routes`],workers:[workers,"distinct slots"],eta:[knownEtas.length?dur(Math.max(...knownEtas)*1000):"—",knownEtas.length?"based on observed busy throughput":"insufficient history"]};
+  if(cards&&!cards.children.length)cards.innerHTML=[metricCard("Queued jobs",cardValues.depth[0],cardValues.depth[1],false,"queue-depth"),metricCard("Active queues",cardValues.active[0],cardValues.active[1],false,"queue-active"),metricCard("Workers executing",cardValues.workers[0],cardValues.workers[1],false,"queue-workers"),metricCard("Longest drain ETA",cardValues.eta[0],cardValues.eta[1],false,"queue-eta")].join("");
+  Object.entries(cardValues).forEach(([id,v])=>{const c=$(`[data-card="queue-${id}"]`);if(c){c.querySelector(".value").textContent=v[0];c.querySelector(".hint").textContent=v[1];}});
+  const start=state.queuesPage*QUEUES_PAGE_SIZE, page=queues.slice(start,start+QUEUES_PAGE_SIZE);
+  const rows=page.map(q=>{
+    const workerHtml=q.workers.length?q.workers.map(w=>`<div style="margin:2px 0"><span class="status"><span class="dot ${w.active?"running":"off"}"></span>${w.active?"active":"recent"}</span> <b>${esc(w.model||w.slot_id)}</b><span class="faint"> · ${esc(w.worker_id)} · ${esc(w.provider)}</span>${w.job_id?` · <a class="mono" data-job="${esc(w.job_id)}">${short(w.job_id,10)}</a>`:""}<span class="sub" style="margin:0">${w.completed_jobs||0} completed · ${w.avg_duration_ms?dur(Math.round(w.avg_duration_ms))+" avg":"no timing"}</span></div>`).join(""):"<span class=faint>no observed worker</span>";
+    const rate=q.effective_units_per_hour==null?"—":`${fmtUnits(q.effective_units_per_hour)} ${esc(q.cost_unit)}/h`;
+    const eta=q.eta_seconds==null?"insufficient data":q.eta_seconds===0?"empty":dur(Math.round(q.eta_seconds*1000));
+    const failure=q.failure_rate==null?"—":`${(q.failure_rate*100).toFixed(1)}%`;
+    const queued=q.pending_jobs, running=q.leased_jobs+q.running_jobs;
+    return `<tr data-queue-key="${esc(q.workload)}:${esc(q.route)}"><td><b>${esc(q.workload)}</b><span class="sub">${esc(q.route)} · ${esc(q.capability)}</span></td><td class="num"><b>${queued}</b></td><td class="num">${running}</td><td class="num">${fmtUnits(q.backlog_units)} ${esc(q.cost_unit)}</td><td class="num">${rate}<span class="sub">${fmtUnits(q.units_per_worker_hour||0)} per worker-hour</span></td><td><b>${eta}</b></td><td class="num">${q.recent_completed_jobs}<span class="sub">${q.recent_failed_jobs} failed · ${failure}</span></td><td style="min-width:280px">${workerHtml}</td></tr>`;
+  }).join("");
+  if(rows)patchTable(host,["Route","Queued","Running","Units","Observed rate","Drain ETA",`${state.queueWindow}h outcomes`,"Workers"],rows,"data-queue-key"); else host.innerHTML=empty("No queues registered.");
+  const pager=$("#queues-pager"), pages=Math.max(1,Math.ceil(queues.length/QUEUES_PAGE_SIZE));
+  if(pager){const signature=`${state.queuesPage}:${pages}`;if(pager.dataset.signature===signature)return;pager.dataset.signature=signature;pager.innerHTML=`<span class="sub">Page ${state.queuesPage+1} of ${pages}</span><button class="btn ghost" id="queues-prev" ${state.queuesPage===0?"disabled":""}>Previous</button><button class="btn ghost" id="queues-next" ${state.queuesPage>=pages-1?"disabled":""}>Next</button>`;$("#queues-prev").addEventListener("click",()=>{if(state.queuesPage>0){state.queuesPage--;renderQueueData();}});$("#queues-next").addEventListener("click",()=>{if(state.queuesPage<pages-1){state.queuesPage++;renderQueueData();}});}
+}
+
+/* ---------------- Jobs ---------------- */
+function renderJobs() {
+  const states = ["","pending","leased","running","succeeded","dead-letter","cancelled"];
+  $("#main").innerHTML = `${pageHead("Jobs","",`<button class="btn primary" id="submit-new"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New job</button>`)}
+    <div class="toolbar">
+      <select id="f-state" aria-label="Filter by state">${states.map(s=>`<option value="${s}" ${state.jobsFilter.state===s?"selected":""}>${s ? JOB_STATUS[s].label : "All states"}</option>`).join("")}</select>
+      <select id="f-workload" aria-label="Filter by workload"><option value="">all workloads</option>${state.workloads.map(w=>`<option value="${w.name}" ${state.jobsFilter.workload===w.name?"selected":""}>${w.name}</option>`).join("")}</select>
+      <select id="f-gpu" aria-label="Filter by slot"><option value="">all slots</option>${state.gpuSlots.map(s=>`<option value="${esc(s.id)}" ${state.jobsFilter.gpu===s.id?"selected":""}>${esc(s.model)} · ${esc(s.agent_id)}</option>`).join("")}</select>
+      <input id="f-q" type="search" placeholder="Search by job id, project, prompt…" value="${esc(state.jobsFilter.q)}" class="grow" style="min-width:200px" />
+      <button class="btn ghost" id="clear-filters">Reset</button>
+    </div>
+    <div id="jobs-host"><p class="empty">loading…</p></div>
+    <div class="toolbar" id="jobs-pager" style="justify-content:flex-end;margin-top:14px"></div>`;
+  $("#f-state").addEventListener("change", e => { state.jobsFilter.state = e.target.value; state.jobsPage=0; fetchJobs(); });
+  $("#f-workload").addEventListener("change", e => { state.jobsFilter.workload = e.target.value; state.jobsPage=0; fetchJobs(); });
+  $("#f-gpu").addEventListener("change", e => { state.jobsFilter.gpu = e.target.value; state.jobsPage=0; fetchJobs(); });
+  $("#f-q").addEventListener("input", e => { state.jobsFilter.q = e.target.value; state.jobsPage=0; fetchJobs(); });
+  $("#clear-filters").addEventListener("click", () => { state.jobsFilter={state:"",workload:"",gpu:"",q:""}; state.jobsPage=0; renderJobs(); });
+  $("#submit-new").addEventListener("click", () => openSubmit());
+  $("#jobs-host").addEventListener("click", e => {
+    const row=e.target.closest("tr[data-job]"); if(row) openJob(row.dataset.job);
+  });
+  loadGpuSlots();
+  fetchJobs();
+}
+async function loadGpuSlots() {
+  if (!state.overview?.can_administer) return;
+  try {
+    const agents = (await api("/v1/control/agents")).json;
+    state.gpuSlots = agents.flatMap(a => (a.slots||[]).map(s => ({
+      id:s.id, model:s.model, agent_id:a.id, provider:a.provider, historical:!!a.historical
+    }))).sort((a,b)=>(Number(a.historical)-Number(b.historical))||(a.model+a.agent_id).localeCompare(b.model+b.agent_id));
+    const sel=$("#f-gpu"); if (!sel) return;
+    sel.innerHTML=`<option value="">all slots</option>`+state.gpuSlots.map(s=>`<option value="${esc(s.id)}" ${state.jobsFilter.gpu===s.id?"selected":""}>${s.historical?"past · ":""}${esc(s.model)} · ${esc(s.agent_id)}</option>`).join("");
+    if (state.tab==="jobs") fetchJobs();
+  } catch (_) { /* project clients can still inspect the assigned slot in rows */ }
+}
+function gpuForJob(j) {
+  const slot=state.gpuSlots.find(s=>s.id===j.slot_id);
+  return slot ? `${slot.model} · ${slot.agent_id}` : (j.slot_id||j.worker_id||"—");
+}
+async function fetchJobs() {
+  const generation=++jobsFetchGeneration;
+  const f = state.jobsFilter;
+  const params = new URLSearchParams();
+  if (f.state) params.set("state", f.state);
+  if (f.workload) params.set("workload", f.workload);
+  if (f.gpu) params.set("slot_id", f.gpu);
+  if (f.q) params.set("q", f.q);
+  params.set("limit", String(JOBS_PAGE_SIZE+1));
+  params.set("offset", String(state.jobsPage*JOBS_PAGE_SIZE));
+  const host = $("#jobs-host");
+  try {
+    let jobs = (await api("/v1/jobs?" + params)).json;
+    if(generation!==jobsFetchGeneration || state.tab!=="jobs" || !host?.isConnected)return;
+    if (!state.gpuSlots.length) {
+      const seen=new Set();
+      state.gpuSlots=jobs.filter(j=>j.slot_id&&!seen.has(j.slot_id)&&seen.add(j.slot_id)).map(j=>({id:j.slot_id,model:j.slot_id,agent_id:j.worker_id||"",provider:""}));
+      const sel=$("#f-gpu"); if(sel) sel.innerHTML=`<option value="">all slots</option>`+state.gpuSlots.map(s=>`<option value="${esc(s.id)}" ${f.gpu===s.id?"selected":""}>${esc(s.model)} · ${esc(s.agent_id)}</option>`).join("");
+    }
+    const hasNext=jobs.length>JOBS_PAGE_SIZE; jobs=jobs.slice(0,JOBS_PAGE_SIZE);
+    if (!jobs.length) { host.innerHTML = empty("No jobs match."); renderJobsPager(false); return; }
+    const rows = jobs.map(j => {
+      const sample = jobSample(j);
+      return `<tr data-job="${esc(j.id)}">
+        <td class="mono"><b>${short(j.id,12)}</b></td>
+        <td>${esc(j.project_id)}</td>
+        <td>${esc(j.workload)} <span class="faint">/ ${esc(j.route)}</span></td>
+        <td>${statusHtml(j.state)}</td>
+        <td class="muted" title="${esc(j.slot_id||"")}">${esc(gpuForJob(j))}</td>
+        <td class="num">${j.priority||0}</td>
+        <td class="num">${j.attempts||0}/${j.max_attempts||0}</td>
+        <td class="muted">${age(j.created_at)}</td>
+        <td class="num muted">${dur(j.finished_at ? durMs(j) : null)}</td>
+        <td class="muted" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(sample)}">${esc(sample)}</td>
+      </tr>`;
+    }).join("");
+    patchTable(host, ["Job","Project","Workload","Status","Worker / slot","Prio","Tries","Age","Runtime","Detail"], rows, "data-job");
+    renderJobsPager(hasNext);
+  } catch (e) {
+    if(generation!==jobsFetchGeneration || state.tab!=="jobs" || !host?.isConnected)return;
+    if(!host.querySelector("table")) host.innerHTML=errBox(e);
+    else noteStale(host,e);
+  }
+}
+function renderJobsPager(hasNext){
+  const host=$("#jobs-pager"); if(!host)return;
+  const signature=`${state.jobsPage}:${hasNext}`; if(host.dataset.signature===signature)return; host.dataset.signature=signature;
+  host.innerHTML=`<span class="sub">Page ${state.jobsPage+1}</span><button class="btn ghost" id="jobs-prev" ${state.jobsPage===0?"disabled":""}>Previous</button><button class="btn ghost" id="jobs-next" ${hasNext?"":"disabled"}>Next</button>`;
+  $("#jobs-prev").addEventListener("click",()=>{if(state.jobsPage>0){state.jobsPage--;fetchJobs();}});
+  $("#jobs-next").addEventListener("click",()=>{if(hasNext){state.jobsPage++;fetchJobs();}});
+}
+function durMs(j){ const st=parseTs(j.started_at); if(!st) return null; const end=parseTs(j.finished_at)||new Date(); return end-st; }
+function jobSample(j){ const p=j.payload||{}; return p.prompt||p.message||(p.text?p.text.slice(0,60):JSON.stringify(p).slice(0,60)); }
+
+async function openJob(jobId) {
+  const drawer = $("#drawer");
+  lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  drawer.classList.add("open");
+  $("#scrim").classList.add("open");
+  drawer.innerHTML = `<header><div style="flex:1;min-width:0"><div class="title" id="d-title"><span class="mono" style="font-weight:400">${esc(jobId)}</span></div><div class="mono faint" id="d-sub" style="font-size:12px;margin-top:4px">loading…</div></div><span id="d-status"></span><button class="btn ghost" id="close-drawer" aria-label="Close"><svg class="icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header><div class="body"><p class="empty">loading…</p></div>`;
+  $("#close-drawer").addEventListener("click", closeDrawer);
+  $("#close-drawer").focus();
+  try {
+    const [jr, ar, er] = await Promise.all([
+      api("/v1/jobs/" + jobId),
+      api("/v1/jobs/" + jobId + "/attempts"),
+      api("/v1/jobs/" + jobId + "/events"),
+    ]);
+    const j = jr.json; const attempts = ar.json; const events = er.json;
+    const t=$("#d-title"); if(t) t.innerHTML=`${esc(j.workload)} <span class="faint" style="font-weight:400">/ ${esc(j.route)}</span>`;
+    const s=$("#d-sub"); if(s) s.textContent=j.id;
+    const st=$("#d-status"); if(st) st.innerHTML=statusHtml(j.state);
+    drawer.querySelector(".body").innerHTML = jobDetailHtml(j, attempts, events);
+    bindJobDetail(j);
+  } catch (e) {
+    drawer.querySelector(".body").innerHTML = errBox(e);
+  }
+}
+function closeDrawer() {
+  $("#drawer").classList.remove("open");
+  $("#scrim").classList.remove("open");
+  if (lastFocus && lastFocus.isConnected) { lastFocus.focus(); lastFocus = null; }
+}
+function jobDetailHtml(j, attempts, events) {
+  const outputs = (j.outputs||[]).map(o => `<div class="output">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:500">${esc(o.name)}</div>
+        <div class="faint" style="font-size:12.5px">${esc(o.media_type)} · ${o.size} bytes</div>
+        <div class="mono faint" style="font-size:11.5px;overflow:hidden;text-overflow:ellipsis">sha256 ${esc(o.sha256)}</div>
+      </div>
+      <button class="btn" data-download="${esc(o.sha256)}" data-name="${esc(o.name)}"><svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Download</button>
+    </div>`).join("") || empty("No artifacts attached.");
+  const timeline = events.length ? `<ul class="steps">` + events.map(e => `
+      <li><span class="dot ${dotForEvent(e.event_type)}"></span><span>${eventText(e,false)}</span><time title="${esc(e.created_at)}">${clockTime(e.created_at)}</time></li>`).join("") + `</ul>` : empty("No events yet.");
+  const attemptsRaw = attempts.length ? `<pre class="code">${esc(JSON.stringify(attempts, null, 2))}</pre>` : `<p class="sub">Not yet executed.</p>`;
+  const canCancel = ["pending","leased","running"].includes(j.state);
+  return `
+    ${j.error_code?`<div class="card pad" style="border-color:var(--bad);margin-bottom:16px"><b class="mono" style="color:var(--bad)">${esc(j.error_code)}</b><pre class="code" style="margin-top:8px">${esc(j.error_message||"")}</pre></div>`:""}
+    <h4 style="margin-top:0">Outputs</h4>${outputs}
+    <h4>Timeline</h4>${timeline}
+    <h4>Details</h4>
+    <dl class="kv">
+      <dt>State</dt><dd>${statusHtml(j.state)}</dd>
+      <dt>Project</dt><dd>${esc(j.project_id)}</dd>
+      <dt>Workload</dt><dd>${esc(j.workload)}@${esc(j.workload_version)} <span class="faint">/ route ${esc(j.route)}</span></dd>
+      <dt>Priority</dt><dd class="tnum">${j.priority||0}</dd>
+      <dt>Attempts</dt><dd class="tnum">${j.attempts||0} of ${j.max_attempts||0}</dd>
+      <dt>Estimated</dt><dd class="tnum">${fmtUnits(j.estimated_units)} ${esc(j.cost_unit)}</dd>
+      <dt>Created</dt><dd class="mono">${esc(j.created_at)}</dd>
+      <dt>Worker</dt><dd class="mono">${esc(j.worker_id||"—")} <span class="faint">${esc(j.slot_id||"")}</span></dd>
+      <dt>Idempotency</dt><dd class="mono">${esc(j.idempotency_key||"—")}</dd>
+    </dl>
+    <h4>Input</h4>
+    <pre class="code">${esc(JSON.stringify(j.payload||{}, null, 2))}</pre>
+    <details style="margin-top:16px"><summary><b>Requirements & executor</b></summary>
+      <pre class="code" style="margin-top:8px">${esc(JSON.stringify({requirements:j.requirements, executor:j.executor}, null, 2))}</pre></details>
+    <details style="margin-top:12px"><summary><b>Raw attempts & event log</b></summary>
+      ${attemptsRaw}
+      <pre class="code" style="margin-top:10px">${esc(JSON.stringify(events, null, 2))}</pre></details>
+    <div style="margin-top:26px;display:flex;gap:8px">
+      <button class="btn" id="resubmit">Run again</button>
+      ${canCancel?`<button class="btn ghost danger" id="cancel-job">Cancel job</button>`:""}
+    </div>`;
+}
+function bindJobDetail(j) {
+  const drawer = $("#drawer");
+  $$("button[data-download]", drawer).forEach(b => b.addEventListener("click", async () => {
+    try { const r = await apiRaw(`/v1/jobs/${j.id}/artifacts/${b.dataset.download}`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob); const a = document.createElement("a");
+      a.href = url; a.download = `${b.dataset.name}-${b.dataset.download.slice(0,12)}`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { alert(e.message); }
+  }));
+  const cancel = $("#cancel-job", drawer); if (cancel) cancel.addEventListener("click", async () => {
+    if (!confirm("Cancel this job?")) return;
+    try { await api(`/v1/jobs/${j.id}`, { method: "DELETE" }); openJob(j.id); } catch (e){ alert(e.message); }
+  });
+  const resub = $("#resubmit", drawer); if (resub) resub.addEventListener("click", () => openSubmit(j.workload, j.route, j.payload, j.priority, j.project_id));
+}
+
+/* ---------------- Workloads ---------------- */
+async function loadWorkloads() {
+  try { state.workloads = (await api("/v1/workloads")).json; }
+  catch (e) { state.workloads = []; }
+  const sel = $("#f-workload"); if (sel) { const cur = state.jobsFilter.workload; sel.innerHTML = `<option value="">all workloads</option>` + state.workloads.map(w=>`<option value="${w.name}" ${cur===w.name?"selected":""}>${w.name}</option>`).join(""); }
+}
+async function renderWorkloadsTab() {
+  if (!state.workloads.length) await loadWorkloads();
+  if (state.tab !== "workloads") return;
+  if (!state.workloads.length) {
+    $("#main").innerHTML = `${pageHead("Workloads","Trusted job types this control plane accepts")}${empty("No workloads are available to this access token.")}`;
+    return;
+  }
+  const cards = state.workloads.map(w => {
+    const routeLine = ([name,r]) => `<div class="route">
+        <span>${esc(name)}${name===w.default_route?' <span class="tag" style="margin-left:6px">default</span>':""}</span>
+        <span class="muted">${esc(r.cost?.unit||"?")} · ${r.cost?.default_units_per_gpu_hour||"?"} units per slot-hour · scale ${r.scaling?.min_slots||0}–${r.scaling?.max_slots||"?"} · ${esc(r.executor?.type||"")} · ${esc(r.compatibility?.capability||"")}</span>
+      </div>`;
+    const allRoutes = Object.entries(w.routes||{});
+    allRoutes.sort((a,b) => (a[0]===w.default_route?-1:0)-(b[0]===w.default_route?-1:0));
+    const INLINE_ROUTES = 4;
+    const routes = allRoutes.slice(0, INLINE_ROUTES).map(routeLine).join("") +
+      (allRoutes.length > INLINE_ROUTES
+        ? `<div class="route"><span class="faint">+ ${allRoutes.length-INLINE_ROUTES} more route${allRoutes.length-INLINE_ROUTES===1?"":"s"}</span><span></span></div>`
+        : "");
+    const props = w.payload_schema?.properties||{};
+    const fields = Object.keys(props);
+    return `<div class="card wcard">
+      <div><h3>${esc(w.name)}</h3><p>${esc(w.description||"")}</p></div>
+      <div class="routes">${routes}</div>
+      <footer><span>v${esc(w.version)} · ${fields.map(esc).join(", ")||"no payload fields"}</span><button class="btn" data-submit="${esc(w.name)}">Submit</button></footer>
+    </div>`;
+  }).join("");
+  $("#main").innerHTML = `${pageHead("Workloads","Trusted job types this control plane accepts")}<div class="wcards">${cards}</div>`;
+  $$("#main button[data-submit]").forEach(b => b.addEventListener("click", () => openSubmit(b.dataset.submit)));
+}
+
+/* ---------------- Submit (schema-bounded) ---------------- */
+async function openSubmit(workloadName, routeName, presetPayload, presetPriority, presetProject) {
+  if (!state.workloads.length) {
+    try { state.workloads = (await api("/v1/workloads")).json; }
+    catch (e) { modal(errBox(e)); return; }
+  }
+  const w = state.workloads.find(x => x.name === (workloadName || state.workloads[0]?.name));
+  if (!w) {
+    modal(`<h3>No workloads available</h3><p>This access token cannot submit any configured workloads.</p><div class="row"><button class="btn" id="empty-submit-close">Close</button></div>`);
+    $("#empty-submit-close").addEventListener("click", closeModal);
+    return;
+  }
+  const routeNames = Object.keys(w.routes||{});
+  const route = routeName || w.default_route || routeNames[0];
+  const preset = presetPayload || {};
+  const fields = renderSchemaFields(w.payload_schema, preset);
+  const projDefault = state.role === "client" ? (state.subject||"") : (presetProject||"");
+  const projectInput = state.role === "client"
+    ? `<input type="hidden" id="s-project" value="${esc(state.subject||"")}" /><div class="hint">Scoped to your project <b>${esc(state.subject||"")}</b></div>`
+    : `<input id="s-project" value="${esc(projDefault)}" placeholder="project-id (lowercase)" style="width:100%" />`;
+  modal(`
+    <h3>Submit a job — ${esc(w.name)}</h3>
+    <p style="margin-bottom:14px">${esc(w.description||"")}</p>
+    <div class="toolbar" style="margin-bottom:4px">
+      <label style="color:var(--text-2);font-size:12.5px">Route
+        <select id="s-route">${routeNames.map(r=>`<option value="${r}" ${r===route?"selected":""}>${r}${r===w.default_route?" (default)":""}</option>`).join("")}</select></label>
+      <label style="color:var(--text-2);font-size:12.5px">Priority <input id="s-priority" type="number" value="${presetPriority!=null?presetPriority:0}" /></label>
+    </div>
+    <div class="field"><label>Project</label>${projectInput}</div>
+    <div class="field"><label>Idempotency key <span class="faint">(optional)</span></label><input id="s-idem" style="width:100%" placeholder="auto" /></div>
+    <hr />
+    <div id="schema-fields">${fields}</div>
+    <div class="err" id="s-err"></div>
+    <div class="row"><button class="btn ghost" id="modal-cancel">Cancel</button><button class="btn primary" id="modal-submit">Submit job</button></div>
+  `);
+  $("#modal-cancel").addEventListener("click", closeModal);
+  $("#modal-submit").addEventListener("click", () => submitFromModal(w));
+}
+function renderSchemaFields(schema, preset) {
+  const props = schema?.properties||{};
+  const req = new Set(schema?.required||[]);
+  return Object.entries(props).map(([name, s]) => {
+    const required = req.has(name);
+    const lab = `<label>${esc(name)} ${required?'<span class="req">*</span>':""} <span class="faint" style="font-weight:400">(${esc(s.type||"any")})</span></label>`;
+    let input;
+    const val = preset[name] !== undefined ? preset[name] : s.default;
+    const def = val !== undefined ? `value="${esc(val)}"` : "";
+    if (s.enum) {
+      input = `<select id="f-${name}">${s.enum.map(o=>`<option value="${esc(o)}" ${val!==undefined&&String(val)===String(o)?"selected":""}>${esc(o)}</option>`).join("")}</select>`;
+    } else if (s.type === "boolean") {
+      input = `<input id="f-${name}" type="checkbox" ${val?"checked":""} />`;
+    } else if (s.type === "integer" || s.type === "number") {
+      const step = s.multipleOf!=null?`step="${s.multipleOf}"`:(s.type==="integer"?'step="1"':'step="any"');
+      input = `<input id="f-${name}" type="number" ${step} ${s.minimum!=null?`min="${s.minimum}"`:""} ${s.maximum!=null?`max="${s.maximum}"`:""} ${def} style="max-width:240px" />`;
+    } else {
+      const longText = !s.maxLength || s.maxLength > 120 || name.includes("prompt") || name === "message";
+      input = longText
+        ? `<textarea id="f-${name}" rows="${name.includes("negative")?2:3}" ${s.maxLength?`maxlength="${s.maxLength}"`:""}>${val!==undefined?esc(val):""}</textarea>`
+        : `<input id="f-${name}" type="text" ${s.maxLength?`maxlength="${s.maxLength}"`:""} ${def} ${s.pattern?`pattern="${esc(s.pattern)}"`:""} style="width:100%" />`;
+    }
+    const hint = [];
+    if (s.minimum!=null) hint.push("min "+s.minimum);
+    if (s.maximum!=null) hint.push("max "+s.maximum);
+    if (s.multipleOf!=null) hint.push("multiple of "+s.multipleOf);
+    if (s.maxLength!=null) hint.push("≤ "+s.maxLength+" chars");
+    return `<div class="field">${lab}${input}${hint.length?`<div class="hint">${hint.join(" · ")}</div>`:""}</div>`;
+  }).join("") || `<p class="empty">This workload takes no payload fields.</p>`;
+}
+async function submitFromModal(w) {
+  const err = $("#s-err"); err.textContent = "";
+  const payload = {};
+  const props = w.payload_schema?.properties||{};
+  const required = new Set(w.payload_schema?.required||[]);
+  for (const name of Object.keys(props)) {
+    const s = props[name]; const node = $("#f-"+name);
+    if (!node) continue;
+    let val;
+    if (s.type === "boolean") val = node.checked;
+    else { val = node.value; if (val === "") { if (required.has(name)) { err.textContent = name + " is required"; return; } continue; }
+      if (s.type === "integer") val = parseInt(val, 10);
+      else if (s.type === "number") val = parseFloat(val);
+    }
+    payload[name] = val;
+  }
+  const projectId = $("#s-project").value.trim();
+  if (!projectId) { err.textContent = "project is required"; return; }
+  const body = { project_id: projectId, workload: w.name, route: $("#s-route").value, priority: parseInt($("#s-priority").value||"0",10), payload };
+  const idem = $("#s-idem").value.trim();
+  const headers = {}; if (idem) headers["Idempotency-Key"] = idem;
+  try {
+    const { json } = await api("/v1/jobs", { method: "POST", body: JSON.stringify(body), headers });
+    closeModal(); state.tab = "jobs"; showTab("jobs");
+    setTimeout(() => openJob(json.id), 150);
+  } catch (e) { err.textContent = e.message; }
+}
+
+/* ---------------- Admin ---------------- */
+async function renderAdmin() {
+  if (!state.overview?.can_administer) { $("#main").innerHTML = empty("Admin actions require a controller or admin token."); return; }
+  state.tokenSort=state.tokenSort||{field:"status",direction:"asc"};
+  $("#main").innerHTML = `${pageHead("Admin","Access tokens and provider deployments")}
+    <div class="section"><div class="section-head"><h2>Deployed workers</h2><span class="hint">provider resource + agent tracking</span><div class="actions"><button class="btn ghost" id="dep-reconcile">Reconcile now</button></div></div>
+      <div class="hint" id="dep-note" style="margin-bottom:10px">Automatically reconciled in the background.</div>
+      <div id="dep-host"><p class="empty">loading…</p></div></div>
+    <div class="section"><div class="section-head"><h2>Operations</h2></div>
+      <div class="wcards" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+        <div class="card pad"><b>Reap expired leases</b><p class="sub" style="margin-top:6px">Requeue jobs whose worker leases expired.</p><button class="btn" id="reap-btn" style="margin-top:12px">Reap now</button><div id="reap-out" class="sub" style="margin-top:10px"></div></div>
+        <div class="card pad"><b>Issue a token</b><p class="sub" style="margin-top:6px">Mint a scoped credential (admin only).</p><button class="btn" id="token-btn" style="margin-top:12px">Issue token…</button></div>
+      </div></div>
+    <div class="section"><div class="section-head"><h2>Issued tokens</h2><span class="hint">credential lifecycle audit</span><div class="actions">
+      <label class="sub" for="token-sort">Sort by</label><select id="token-sort">${[["status","Status"],["expires_at","Expiration"],["created_at","Issued"],["updated_at","Updated"],["last_used_at","Last used"]].map(([v,l])=>`<option value="${v}" ${state.tokenSort.field===v?"selected":""}>${l}</option>`).join("")}</select>
+      <button class="btn ghost" id="token-sort-direction" title="Reverse token sorting">${state.tokenSort.direction==="asc"?"↑ Ascending":"↓ Descending"}</button></div></div>
+      <div id="token-host"><p class="empty">loading…</p></div></div>
+    <div class="section"><div class="section-head"><h2>Capacity & deploy</h2><span class="hint">provider pools and their plans</span><div class="actions"><button class="btn ghost" id="cap-refresh">Refresh plans</button></div></div>
+      <div id="cap-host"><p class="empty">loading…</p></div></div>
+    <div class="section"><div class="section-head"><h2>Fleet backlog</h2></div><div id="admin-backlog"><p class="empty">loading…</p></div></div>`;
+  $("#reap-btn").addEventListener("click", reapLeases);
+  $("#token-btn").addEventListener("click", openTokenModal);
+  $("#token-sort").addEventListener("change",e=>{state.tokenSort.field=e.target.value;renderTokenData();});
+  $("#token-sort-direction").addEventListener("click",e=>{state.tokenSort.direction=state.tokenSort.direction==="asc"?"desc":"asc";e.currentTarget.textContent=state.tokenSort.direction==="asc"?"↑ Ascending":"↓ Descending";renderTokenData();});
+  $("#token-host").addEventListener("click",async e=>{
+    const edit=e.target.closest("button[data-token-edit]"); if(edit){openEditToken((state.tokens||[]).find(t=>t.id===edit.dataset.tokenEdit));return;}
+    const revoke=e.target.closest("button[data-token-revoke]"); if(!revoke)return;
+    const id=revoke.dataset.tokenRevoke;
+    if(!confirm(`Revoke token ${id}? Existing holders will lose access immediately. The audit row will be retained.`))return;
+    try{await api("/v1/control/tokens/"+encodeURIComponent(id),{method:"DELETE"});loadTokens();}catch(err){alert(err.message);}
+  });
+  $("#cap-refresh").addEventListener("click", loadCapacity);
+  $("#dep-host").addEventListener("click", async e => {
+    const b=e.target.closest("button[data-destroy]"); if(!b)return;
+    if(!confirm(`Tear down ${b.dataset.worker}? Active provider resource will be destroyed and its credential retired.`))return;
+    try{await api("/v1/control/deployments/"+b.dataset.destroy,{method:"DELETE"});loadDeployments();}catch(err){alert(err.message);}
+  });
+  $("#dep-reconcile").addEventListener("click", async () => {
+    const note = $("#dep-note"); note.textContent = "reconciling…";
+    try { const { json } = await api("/v1/control/deployments/reconcile", { method: "POST" });
+      note.textContent = `checked ${json.checked||0}: ${json.active||0} active, ${(json.creating||0)+(json.allocating||0)} provisioning, ${json.starting||0} starting, ${json.stale||0} stale, ${json.absent||0} absent, ${json.errors||0} errors`; loadDeployments(); }
+    catch (e) { note.textContent = e.message; }
+  });
+  loadCapacity();
+  loadDeployments();
+  loadTokens();
+  try {
+    const [{ json }, ] = await Promise.all([api("/v1/control/backlog"), fetchQueuesData().catch(()=>{})]);
+    const rows = backlogRowsHtml(json);
+    $("#admin-backlog").innerHTML = rows ? table(["Route","Queued","Running","Units","Drain"], rows) : empty("Nothing queued.");
+  } catch(e){ $("#admin-backlog").innerHTML = errBox(e); }
+}
+
+function offerAvailability(o) {
+  return o.available_count == null ? "unknown" : `${o.available_count} available`;
+}
+const MONTHLY_BILLING_HOURS = 730;
+function offerPrice(o) { return `$${Number(o.hourly_cost_usd||0).toFixed(4)}/h`; }
+function offerMonthly(o, count=1) { return `$${(Number(o.hourly_cost_usd||0)*count*MONTHLY_BILLING_HOURS).toFixed(2)}/mo`; }
+function offerLabel(o) {
+  const priority = o.priority ? ` · ${o.priority}` : "";
+  return `${o.gpu_model}${priority} · ${offerPrice(o)} · ${offerMonthly(o)} · ${offerAvailability(o)}`;
+}
+
+async function loadCapacity() {
+  const host = $("#cap-host"); if (!host) return;
+  let caps;
+  try { caps = (await api("/v1/control/capacity")).json; }
+  catch (e) {
+    host.innerHTML = `<div class="card pad">Provider deploys are not configured on this control plane.
+      Set <span class="mono">SPAREHOUR_PUBLIC_URL</span> (and provider API keys) to enable worker deployment.
+      ${e.status===404?"":"<div class=\"sub\">"+esc(e.message)+"</div>"}</div>`;
+    return;
+  }
+  state.capacity = caps;
+  renderCapacity();
+}
+function renderCapacity() {
+  const host=$("#cap-host"), caps=state.capacity||[]; if(!host)return;
+  if (!caps.length) { host.innerHTML = empty("No pool policies found in the pools directory."); return; }
+  host.innerHTML = caps.map(c => {
+    const p = c.pool, plan = c.plan || {};
+    const provRows = (plan.providers||[]).map(pr => {
+      const offers = pr.offers||[];
+      const usable = offers.filter(o=>o.available_count!==0).sort((a,b)=>Number(a.hourly_cost_usd)-Number(b.hourly_cost_usd));
+      const cheapest = usable[0];
+      const status = pr.blocked_reason
+        ? `<span class="status bad"><span class="dot bad"></span>${esc(pr.blocked_reason)}</span>`
+        : cheapest
+          ? `<span class="status"><span class="dot ${cheapest.available_count==null?"pending":"ok"}"></span>${cheapest.available_count==null?"availability unknown":"capacity found"}</span>`
+          : `<span class="status"><span class="dot pending"></span>no live capacity</span>`;
+      const canDeploy = pr.provider!=="local" && p.providers[pr.provider]?.enabled && !pr.blocked_reason && cheapest;
+      return `<tr><td><b>${esc(pr.provider)}</b></td>
+        <td class="num">${pr.credit_usd!=null?"$"+Number(pr.credit_usd).toFixed(2):"unknown"}</td>
+        <td>${status}</td>
+        <td>${cheapest?`${esc(cheapest.gpu_model)}${cheapest.priority?` <span class="tag">${esc(cheapest.priority)}</span>`:""}`:"—"}</td>
+        <td class="num">${cheapest?`${offerPrice(cheapest)}<span class="sub">${offerMonthly(cheapest)}</span>`:"—"}</td>
+        <td>${cheapest?esc(offerAvailability(cheapest)):"—"}</td>
+        <td>${canDeploy?`<button class="btn ghost" data-deploy="${esc(p.id)}" data-provider="${esc(pr.provider)}">Choose & deploy…</button>`:""}</td></tr>`;
+    }).join("");
+    const allOfferRows = (plan.providers||[]).flatMap(pr => (pr.offers||[]).map(o => `<tr>
+      <td><b>${esc(pr.provider)}</b></td><td>${esc(o.gpu_model)}</td>
+      <td>${o.priority?`<span class="tag">${esc(o.priority)}</span>`:"market"}</td>
+      <td><span class="status"><span class="dot ${o.available_count===0?"bad":o.available_count==null?"pending":"ok"}"></span>${esc(offerAvailability(o))}</span></td>
+      <td class="num"><b>${offerPrice(o)}</b><span class="sub">$${(Number(o.hourly_cost_usd||0)*24).toFixed(2)}/day · ${offerMonthly(o)}</span></td>
+      <td class="sub" style="margin:0">${esc(o.price_source||"provider")}${o.availability_status?` · ${esc(o.availability_status)} availability`:""}</td></tr>`));
+    const maxPage=Math.max(0,Math.ceil(allOfferRows.length/OFFERS_PAGE_SIZE)-1);
+    const offerPage=Math.min(state.capacityPages[p.id]||0,maxPage); state.capacityPages[p.id]=offerPage;
+    const offerRows=allOfferRows.slice(offerPage*OFFERS_PAGE_SIZE,(offerPage+1)*OFFERS_PAGE_SIZE);
+    const offerPager=allOfferRows.length>OFFERS_PAGE_SIZE?`<div class="toolbar" style="justify-content:flex-end;margin-top:10px"><span class="sub">Offers page ${offerPage+1} of ${maxPage+1}</span><button class="btn ghost" data-offer-page="${offerPage-1}" data-pool="${esc(p.id)}" ${offerPage===0?"disabled":""}>Previous</button><button class="btn ghost" data-offer-page="${offerPage+1}" data-pool="${esc(p.id)}" ${offerPage===maxPage?"disabled":""}>Next</button></div>`:"";
+    const target = plan.target_slots!=null?plan.target_slots:"—";
+    return `<div class="card pad" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
+        <div><b>${esc(p.id)}</b> <span class="faint">${esc(p.workload)} / ${esc(p.route)}</span>
+          <div class="sub">capability <span class="mono">${esc(c.capability)}</span> · slots ${plan.current_slots ?? 0} current → ${target} target</div>
+          <div class="sub">queued ${plan.queued_jobs ?? 0} jobs (${fmtUnits(plan.queued_units||0)} units) · ${esc(plan.reason||plan.error||"")}</div></div>
+        ${plan.blocked_reason?`<span class="status bad"><span class="dot bad"></span>${esc(plan.blocked_reason)}</span>`:""}
+      </div>
+      ${provRows?`<div class="scrollx" style="margin-top:10px">${tableInner(["Provider","Credit","Status","Cheapest eligible","Cost","Availability",""],provRows)}</div>`:empty("No provider policies in this pool.")}
+      ${offerRows.length?`<div class="sub" style="margin:12px 0 5px">Priced candidates — availability is a preflight signal, not an allocation guarantee.</div><div class="scrollx">${tableInner(["Provider","Hardware class","Priority","Availability","Cost","Source"],offerRows.join(""))}</div>${offerPager}`:""}
+    </div>`;
+  }).join("");
+  $$("#cap-host button[data-deploy]").forEach(b => b.addEventListener("click", () =>
+    openDeployModal(b.dataset.deploy, b.dataset.provider)));
+  $$("#cap-host button[data-offer-page]").forEach(b=>b.addEventListener("click",()=>{
+    state.capacityPages[b.dataset.pool]=Math.max(0,Number(b.dataset.offerPage)); renderCapacity();
+  }));
+}
+function tableInner(heads, rowsHtml){ return `<table class="table"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rowsHtml}</tbody></table>`; }
+
+function openDeployModal(poolId, provider) {
+  const cap = (state.capacity||[]).find(c=>c.pool.id===poolId);
+  const providerPlan = (cap?.plan?.providers||[]).find(p=>p.provider===provider);
+  const offers = (providerPlan?.offers||[]).filter(o=>o.available_count!==0)
+    .sort((a,b)=>Number(a.hourly_cost_usd)-Number(b.hourly_cost_usd));
+  if (!offers.length) {
+    modal(`<h3>No deployable ${esc(provider)} offer</h3><p>Refresh capacity and choose a provider with eligible capacity.</p>
+      <div class="row"><button class="btn ghost" id="modal-cancel">Close</button></div>`);
+    $("#modal-cancel").addEventListener("click", closeModal); return;
+  }
+  const options = offers.map(o=>`<option value="${esc(o.offer_id)}">${esc(offerLabel(o))}</option>`).join("");
+  modal(`<h3>Choose capacity — ${esc(provider)} / ${esc(poolId)}</h3>
+    <p style="font-size:12.5px">Operator-initiated and billed until Destroy. Token expiry does not stop provider billing.</p>
+    <div class="field"><label>Hardware class and priority</label><select id="d-offer" style="width:100%">${options}</select></div>
+    <div class="field"><label>Workers <span class="faint">(1–5)</span></label><input id="d-count" type="number" min="1" max="5" value="1" style="max-width:120px" /></div>
+    <div class="field"><label>Token lifetime (hours) <span class="faint">(1–168)</span></label><input id="d-expires" type="number" min="1" max="168" value="24" style="max-width:120px" /></div>
+    <div class="card pad" id="d-cost" style="margin-top:12px"></div>
+    <div class="err" id="d-err"></div>
+    <div class="row"><button class="btn ghost" id="modal-cancel">Cancel</button><button class="btn primary" id="d-go">Deploy</button></div>
+    <div id="d-out" style="margin-top:10px"></div>`);
+  const selected = () => offers.find(o=>o.offer_id===$("#d-offer").value) || offers[0];
+  const updateCost = () => {
+    const o=selected(), count=Math.max(1,Math.min(5,parseInt($("#d-count").value||"1",10)));
+    const fleet=Number(o.hourly_cost_usd||0)*count;
+    const over=o.available_count!=null && count>o.available_count;
+    $("#d-cost").innerHTML = `<b>${esc(o.gpu_model)}</b> ${o.priority?`<span class="tag">${esc(o.priority)}</span>`:""}
+      <div class="sub">${offerPrice(o)} each · <b>$${fleet.toFixed(4)}/h</b> for ${count} worker${count===1?"":"s"} · $${(fleet*24).toFixed(2)}/day · <b>${offerMonthly(o,count)}</b></div>
+      <div class="sub">Monthly estimate uses 730 continuously billed hours; billing stops only after verified Destroy.</div>
+      <div class="sub">${esc(offerAvailability(o))} · ${esc(o.price_source||"provider price")}${o.availability_status==="unknown"?" · allocation not guaranteed":""}</div>`;
+    $("#d-err").textContent = over?`Only ${o.available_count} currently available for this offer.`:"";
+    $("#d-go").disabled=over; $("#d-go").textContent=`Deploy · $${fleet.toFixed(4)}/h`;
+  };
+  $("#modal-cancel").addEventListener("click", closeModal);
+  $("#d-offer").addEventListener("change",updateCost); $("#d-count").addEventListener("input",updateCost); updateCost();
+  $("#d-go").addEventListener("click", async () => {
+    $("#d-err").textContent=""; const o=selected();
+    try {
+      const { json } = await api("/v1/control/deployments", { method:"POST", body: JSON.stringify({
+        pool_id: poolId, provider, offer_id:o.offer_id, count: parseInt($("#d-count").value||"1",10),
+        expires_hours: parseInt($("#d-expires").value||"24",10) })});
+      const rows = json.map(r=>`<tr><td class="mono">${esc(r.worker_id)}</td><td>${esc(r.provider)}</td><td class="mono">${short(r.resource_id,14)}</td><td><span class="status"><span class="dot ${r.state==="failed"?"bad":"pending"}"></span>${esc(r.state)}</span></td><td class="num">${r.hourly_cost_usd!=null?"$"+Number(r.hourly_cost_usd).toFixed(4)+"/h · $"+(Number(r.hourly_cost_usd)*MONTHLY_BILLING_HOURS).toFixed(2)+"/mo":"—"}</td><td class="sub" style="margin:0">${esc(r.detail||"")}</td></tr>`).join("");
+      $("#d-out").innerHTML = tableInner(["Worker","Provider","Resource","State","Cost","Detail"],rows);
+      setTimeout(()=>{ closeModal(); loadDeployments(); loadCapacity(); }, 2500);
+    } catch (e) { $("#d-err").textContent = e.message; }
+  });
+}
+
+async function loadDeployments() {
+  const host = $("#dep-host"); if (!host) return;
+  let deps;
+  try { deps = (await api("/v1/control/deployments")).json; }
+  catch (e) { host.innerHTML = e.status===404?empty("Deployments are not configured on this control plane."):errBox(e); return; }
+  if (!deps.length) { host.innerHTML = empty("No provider workers deployed yet."); return; }
+  const depDot = s => s==="active"?"ok":["requested","creating","allocating","starting"].includes(s)?"pending":(s==="destroyed"||s==="cancelled")?"off":"bad";
+  patchTable(host,["Worker","Pool / Provider","Resource","Provider state","Agent","Cost","Created",""],
+    deps.map(d=>`<tr data-dep-key="${esc(d.id)}">
+      <td class="mono"><b>${esc(d.worker_id)}</b></td>
+      <td>${esc(d.pool_id)}<span class="sub" style="margin:0">${esc(d.provider)}</span></td>
+      <td class="mono" title="${esc(d.resource_id)}">${short(d.resource_id,12)}</td>
+      <td><span class="status"><span class="dot ${depDot(d.state)}"></span>${esc(d.state)}</span><span class="sub" style="margin:0">${esc(d.detail||"")}</span></td>
+      <td><span class="status"><span class="dot ${d.agent_status==="ready"?"ok":d.agent_status==="not_registered"?"pending":"bad"}"></span>${esc(d.agent_status||"unknown")}</span><span class="sub" style="margin:0">${d.agent_heartbeat_at?relTime(d.agent_heartbeat_at):"no heartbeat"} · ${d.slot_count||0} slot${d.slot_count===1?"":"s"}</span></td>
+      <td class="num">${d.hourly_cost_usd!=null?"$"+Number(d.hourly_cost_usd).toFixed(4)+"/h<span class=\"sub\" style=\"margin:0\">$"+Number(d.estimated_monthly_cost_usd).toFixed(2)+"/mo</span>":"—"}</td>
+      <td class="muted">${relTime(d.created_at)}</td>
+      <td>${d.state!=="destroyed"?`<button class="btn ghost danger" data-destroy="${esc(d.id)}" data-worker="${esc(d.worker_id)}">Destroy</button>`:""}</td></tr>`).join(""),"data-dep-key");
+}
+async function loadTokens(){
+  const host=$("#token-host"); if(!host)return;
+  if(state.role!=="admin"){host.innerHTML=empty("Only an admin token can inspect credential metadata.");return;}
+  try{state.tokens=(await api("/v1/control/tokens")).json;renderTokenData();}catch(e){host.innerHTML=errBox(e);}
+}
+function renderTokenData(){
+  const host=$("#token-host");if(!host)return;const tokens=[...(state.tokens||[])];
+  if(!tokens.length){host.innerHTML=empty("No credentials have been issued.");return;}
+  const sort=state.tokenSort||{field:"status",direction:"asc"},statusRank={active:0,expired:1,revoked:2};
+  tokens.sort((a,b)=>{
+    const av=sort.field==="status"?statusRank[a.status]:a[sort.field],bv=sort.field==="status"?statusRank[b.status]:b[sort.field];
+    if(av==null&&bv==null)return a.id.localeCompare(b.id);if(av==null)return 1;if(bv==null)return -1;
+    const cmp=sort.field==="status"?av-bv:new Date(av).getTime()-new Date(bv).getTime();
+    return (sort.direction==="asc"?cmp:-cmp)||a.id.localeCompare(b.id);
+  });
+  const tone=s=>s==="active"?"ok":s==="expired"?"pending":"off";
+  patchTable(host,["Token ID","Role / subject","Scopes","Status","Last used","Expires","Issued","Updated",""],tokens.map(t=>`<tr data-token-key="${esc(t.id)}">
+    <td class="mono"><b>${esc(t.id)}</b></td><td><span class="tag">${esc(t.role)}</span> ${esc(t.subject)}</td>
+    <td><code>${esc(JSON.stringify(t.scopes||{}))}</code></td><td><span class="status"><span class="dot ${tone(t.status)}"></span>${esc(t.status)}</span>${t.revoked_at?`<span class="sub">${relTime(t.revoked_at)}</span>`:""}</td>
+    <td class="muted">${t.last_used_at?relTime(t.last_used_at):"never"}</td><td class="muted">${t.expires_at?relTime(t.expires_at):"never"}</td><td class="muted">${relTime(t.created_at)}</td><td class="muted">${relTime(t.updated_at)}</td>
+    <td>${t.status!=="revoked"?`<button class="btn ghost" data-token-edit="${esc(t.id)}">Edit</button> <button class="btn ghost danger" data-token-revoke="${esc(t.id)}">Revoke</button>`:""}</td></tr>`).join(""),"data-token-key");
+}
+function openEditToken(t){
+  if(!t)return;
+  const expiry=t.expires_at?new Date(t.expires_at).toISOString().slice(0,16):"";
+  modal(`<h3>Edit token <span class="mono">${esc(t.id)}</span></h3><p class="muted">Changes apply to the existing credential immediately. Token ID and secret cannot be changed.</p>
+    <div class="field"><label>Role</label><select id="te-role">${["admin","client","agent","controller"].map(r=>`<option ${t.role===r?"selected":""}>${r}</option>`).join("")}</select></div>
+    <div class="field"><label>Subject</label><input id="te-subject" value="${esc(t.subject)}" style="width:100%" /></div>
+    <div class="field"><label>Scopes (JSON object)</label><textarea id="te-scopes" rows="5">${esc(JSON.stringify(t.scopes||{},null,2))}</textarea></div>
+    <div class="field"><label>Expires at <span class="faint">(blank means never)</span></label><input id="te-expires" type="datetime-local" value="${esc(expiry)}" /></div>
+    <div class="err" id="te-err"></div><div class="row"><button class="btn ghost" id="te-cancel">Cancel</button><button class="btn primary" id="te-save">Save changes</button></div>`);
+  $("#te-cancel").addEventListener("click",closeModal);
+  $("#te-save").addEventListener("click",async()=>{
+    const err=$("#te-err");err.textContent="";let scopes;
+    try{scopes=JSON.parse($("#te-scopes").value||"{}");if(!scopes||Array.isArray(scopes)||typeof scopes!=="object")throw new Error("must be an object");}catch(e){err.textContent="Scopes must be a JSON object.";return;}
+    const subject=$("#te-subject").value.trim();if(!subject){err.textContent="Subject is required.";return;}
+    const value=$("#te-expires").value;
+    try{await api("/v1/control/tokens/"+encodeURIComponent(t.id),{method:"PUT",body:JSON.stringify({role:$("#te-role").value,subject,scopes,expires_at:value?new Date(value).toISOString():null})});closeModal();loadTokens();}catch(e){err.textContent=e.message;}
+  });
+}
+
+async function reapLeases() {
+  const out = $("#reap-out"); out.textContent = "working…";
+  try { const { json } = await api("/v1/control/reap-expired", { method: "POST" });
+    out.innerHTML = `released <b>${json.released||0}</b>, retried <b>${json.retried||0}</b>, dead-lettered <b>${json.dead_lettered||0}</b>.`; }
+  catch(e){ out.textContent = e.message; }
+}
+function openTokenModal() {
+  modal(`<h3>Issue a scoped token</h3><p class="muted">The raw token is shown once.</p>
+    <div class="field"><label>Role</label><select id="t-role">
+      <option value="client">client (submit/read own project)</option>
+      <option value="controller">controller (observe/reap fleet)</option>
+      <option value="agent">agent (a single worker)</option>
+      <option value="admin">admin (everything)</option></select></div>
+    <div class="field"><label>Subject</label><input id="t-subject" style="width:100%" placeholder="project-id / agent-id / operator" /></div>
+    <div class="field"><label>Scopes <span class="faint">(KEY=VALUE, comma separated)</span></label><input id="t-scopes" style="width:100%" placeholder="projects=project-a, routes=image-generate" /></div>
+    <div class="field"><label>Expires in (hours) <span class="faint">(blank = no expiry)</span></label><input id="t-expires" type="number" min="1" style="max-width:160px" /></div>
+    <div class="err" id="t-err"></div>
+    <div class="row"><button class="btn ghost" id="modal-cancel">Cancel</button><button class="btn primary" id="t-go">Issue</button></div>
+    <div id="t-result" style="margin-top:12px"></div>`);
+  $("#modal-cancel").addEventListener("click", closeModal);
+  $("#t-go").addEventListener("click", async () => {
+    $("#t-err").textContent=""; const role=$("#t-role").value; const subject=$("#t-subject").value.trim();
+    if(!subject){$("#t-err").textContent="subject required";return;}
+    const scopes={}; ($("#t-scopes").value.trim().split(",")).forEach(kv=>{const [k,v]=kv.split("=").map(s=>(s||"").trim());if(k)scopes[k]=[...(scopes[k]||[]),v];});
+    const body={role,subject,scopes}; const eh=$("#t-expires").value.trim(); if(eh) body.expires_at=new Date(Date.now()+parseFloat(eh)*3600*1000).toISOString();
+    try { const { json } = await api("/v1/control/tokens",{method:"POST",body:JSON.stringify(body)});
+      $("#t-result").innerHTML = `<div class="field" style="margin-top:6px"><label>Token</label><textarea rows="3" readonly>${esc(json.token)}</textarea>
+        <div class="hint">Store this securely; it will not be shown again.</div></div>`;
+      loadTokens();
+    } catch(e){ $("#t-err").textContent=e.message; }
+  });
+}
+
+/* ---------------- Modal plumbing ---------------- */
+let modalReturnFocus = null;
+function modal(html){
+  modalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  $("#modal-dialog").innerHTML = html;
+  $("#modal-host").classList.remove("hidden");
+  const first = $("#modal-dialog input, #modal-dialog select, #modal-dialog textarea, #modal-dialog button");
+  if (first) first.focus();
+}
+function closeModal(){
+  $("#modal-host").classList.add("hidden");
+  if (modalReturnFocus && modalReturnFocus.isConnected) { modalReturnFocus.focus(); modalReturnFocus = null; }
+}
+$("#modal-host").addEventListener("click", e => { if (e.target.id === "modal-host") closeModal(); });
+
+function errBox(e){
+  let extra = "";
+  if (e.status === 401) extra = "Your token may be invalid or expired. Try signing out and reconnecting.";
+  else if (e.status === 403) extra = "Your token lacks permission for this action.";
+  return `<div class="card pad" style="border-color:var(--bad)"><b style="color:var(--bad)">${esc(e.message)}</b>${extra?`<div class="sub">${extra}</div>`:""}</div>`;
+}
+
+/* ---------------- Refresh loop ---------------- */
+async function refreshQuiet() {
+  try {
+    const { json } = await api("/v1/dashboard/overview");
+    state.overview = json; renderWho();
+    $("#tab-admin").classList.toggle("hidden", !json.can_administer);
+    if (state.tab === "overview") { if(json.can_administer){ try{ await fetchQueuesData(); }catch(_){} } refreshOverviewView(); }
+    else if (state.tab === "jobs") fetchJobs();
+    else if (state.tab === "queues") fetchQueues();
+    else if (state.tab === "fleet") renderFleet();
+    else if (state.tab === "admin") loadDeployments();
+  } catch (e) {
+    $("#autofoot").textContent = "refresh failed: " + e.message;
+  }
+}
+
+/* ---------------- Bootstrap ---------------- */
+function fmtAuto(){ const d=new Date(); $("#autofoot").textContent = `Auto-refresh every ${REFRESH_MS/1000}s · ${d.toLocaleTimeString()}`; }
+setInterval(fmtAuto, 1000);
+
+$("#tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
+$("#scrim").addEventListener("click", closeDrawer);
+$("#refresh-btn").addEventListener("click", refreshQuiet);
+$("#disconnect-btn").addEventListener("click", () => { if (confirm("Sign out and clear the stored token?")) disconnect(); });
+addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (!$("#modal-host").classList.contains("hidden")) closeModal();
+  else if ($("#drawer").classList.contains("open")) closeDrawer();
+});
+
+$("#connect-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#c-err").textContent = "";
+  const endpoint = $("#c-endpoint").value.trim() || window.location.origin;
+  const token = $("#c-token").value.trim();
+  if (!token) { $("#c-err").textContent = "An access token is required."; return; }
+  try { await doConnect(endpoint, token); }
+  catch (err) { $("#c-err").textContent = err.message; }
+});
+
+(async function init(){
+  const c = loadCreds();
+  if (c.token) {
+    try { await doConnect(c.endpoint, c.token); return; }
+    catch (e) { /* fall through to connect form */ }
+  }
+  $("#c-endpoint").value = window.location.origin;
+  $("#topbar").classList.add("hidden"); $("#main").classList.add("hidden"); $("#autofoot").classList.add("hidden");
+  $("#c-token").focus();
+})();
+</script>
+</body>
+</html>

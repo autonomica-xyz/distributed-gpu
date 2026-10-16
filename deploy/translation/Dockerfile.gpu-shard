@@ -9,16 +9,16 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-pip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-COPY dist/distributed_gpu-*.whl /tmp/
+COPY dist/sparehour-*.whl /tmp/
 RUN python3 -m pip install --break-system-packages --no-cache-dir \
-      /tmp/distributed_gpu-*.whl \
+      /tmp/sparehour-*.whl \
       ctranslate2==4.8.1 \
       sentencepiece==0.2.2 \
       sacremoses==0.1.1 \
       subword-nmt==0.3.8 \
-    && rm /tmp/distributed_gpu-*.whl
+    && rm /tmp/sparehour-*.whl
 COPY state/model-shards/${MODEL_SHARD}/ /opt/models/
 
-LABEL dev.distributed-gpu.dgpu.model-shard="$MODEL_SHARD"
-ENTRYPOINT ["dgpu"]
+LABEL dev.sparehour.model-shard="$MODEL_SHARD"
+ENTRYPOINT ["sparehour"]
 CMD ["--help"]

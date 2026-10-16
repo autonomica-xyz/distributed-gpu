@@ -90,7 +90,7 @@ class SaladProvider:
             base_url,
             {
                 "Salad-Api-Key": api_key,
-                "User-Agent": "distributed-gpu/0.1",
+                "User-Agent": "sparehour/0.1",
             },
             timeout=timeout,
             **kwargs,
@@ -343,8 +343,8 @@ class SaladProvider:
                     provider=self.name,
                     resource_id=str(detail.get("id") or summary.get("id") or name),
                     name=name,
-                    worker_id=str(environment.get("DGPU_AGENT_ID"))
-                    if environment.get("DGPU_AGENT_ID")
+                    worker_id=str(environment.get("SPAREHOUR_AGENT_ID"))
+                    if environment.get("SPAREHOUR_AGENT_ID")
                     else None,
                     state=_salad_instance_state(current_state, detail),
                     gpu_model=str(catalog_row.get("name")) if catalog_row.get("name") else None,

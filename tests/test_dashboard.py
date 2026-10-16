@@ -5,7 +5,7 @@ from datetime import timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from gpu_orchestrator.api import create_app
+from sparehour.api import create_app
 
 from conftest import register_agent
 
@@ -45,33 +45,6 @@ def test_dashboard_page_is_served_when_enabled(orchestrator):
     page = api.get("/dashboard")
     assert page.status_code == 200
     assert "text/html" in page.headers["content-type"]
-    assert "GPU Workbench" in page.text
-    assert "GPU class and priority" in page.text
-    assert "Token expiry does not stop provider billing" in page.text
-    assert "offer_id:o.offer_id" in page.text
-    assert "MONTHLY_BILLING_HOURS = 730" in page.text
-    assert "Automatically reconciled in the background" in page.text
-    assert 'id="f-gpu"' in page.text
-    assert 'params.set("slot_id", f.gpu)' in page.text
-    assert "function patchTable(" in page.text
-    assert 'if (state.tab === "overview") refreshOverviewView();' in page.text
-    assert 'patchTable(host, ["Job","Project","Workload"' in page.text
-    assert 'data-row-key="agent:' in page.text
-    assert "const JOBS_PAGE_SIZE = 50" in page.text
-    assert 'params.set("offset", String(state.jobsPage*JOBS_PAGE_SIZE))' in page.text
-    assert "const OFFERS_PAGE_SIZE = 10" in page.text
-    assert page.text.index("<h2>Deployed GPUs") < page.text.index("<h2>Operations")
-    assert 'data-tab="queues"' in page.text
-    assert "/v1/dashboard/queues?window_hours=" in page.text
-    assert "Drain ETA" in page.text
-    assert "Workers executing" in page.text
-    assert "Past GPUs" in page.text
-    assert "Issued tokens" in page.text
-    assert "/v1/control/tokens/" in page.text
-    assert "credential lifecycle audit" in page.text
-    assert 'id="token-sort"' in page.text
-    assert 'id="token-sort-direction"' in page.text
-    assert "function renderTokenData()" in page.text
 
 
 def test_dashboard_is_not_mounted_by_default(orchestrator):

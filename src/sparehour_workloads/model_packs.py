@@ -10,7 +10,7 @@ bounds the download with ``allow_patterns``::
      "allow_patterns": ["*.json", "*.txt", "*.safetensors", ...]}
 
 ``install_hf_pack`` runs the actual Hub I/O in an owned child process
-(``python -m gpu_orchestrator_workloads.model_packs``): the child lists the
+(``python -m sparehour_workloads.model_packs``): the child lists the
 repo tree at the pinned revision, downloads with ``huggingface_hub`` (lazy
 dependency — the module imports fine without it), verifies every file
 against the repo's own metadata (LFS sha256 / git blob oid), and reports a
@@ -24,7 +24,7 @@ check, and only then swaps the directory into place.
 network, no Hub dependency) so a preinstalled pack — e.g. one built by an
 operator from a verified cache — verifies without any gated fetch or token.
 
-Ownership discipline matches the Argos pack path in ``dworker.dynamic``:
+Ownership discipline matches the Argos pack path in ``sparehour_worker.dynamic``:
 the installer never deletes or overwrites content it cannot prove is one of
 its own pack dirs — manifest identity plus fully manifest-accounted
 contents — and a symlink anywhere in the path traversal refuses the
@@ -482,7 +482,7 @@ def install_hf_pack(
     if importlib.util.find_spec("huggingface_hub") is None:
         raise ModelPackError(
             "installing hf packs requires huggingface_hub "
-            "(install the distributed-gpu 'models' extra)"
+            "(install the sparehour 'models' extra)"
         )
     target = Path(target)
     try:
@@ -679,7 +679,7 @@ def _run_download_child(
     table.
     """
     proc = subprocess.Popen(
-        [sys.executable, "-m", "gpu_orchestrator_workloads.model_packs"],
+        [sys.executable, "-m", "sparehour_workloads.model_packs"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,

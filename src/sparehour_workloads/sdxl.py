@@ -24,7 +24,7 @@ from typing import Any
 
 from PIL.PngImagePlugin import PngInfo
 
-from gpu_orchestrator.agent import ExecutionError
+from sparehour.agent import ExecutionError
 
 
 DEFAULT_MODEL_ID = "stabilityai/stable-diffusion-xl-base-1.0"
@@ -119,7 +119,7 @@ class SdxlExecutor:
         output = workdir / "image.png"
         metadata = PngInfo()
         metadata.add_text(
-            "dgpu",
+            "sparehour",
             json.dumps(
                 {
                     "job_id": job["id"],
@@ -164,7 +164,7 @@ def _verified_model_dir(
         )
     root = model_dir.absolute()
 
-    from gpu_orchestrator_workloads import model_packs
+    from sparehour_workloads import model_packs
 
     try:
         model_packs.verify_hf_pack(

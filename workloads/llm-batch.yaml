@@ -1,4 +1,4 @@
-api_version: distributed-gpu.example/v1alpha1
+api_version: sparehour.example/v1alpha1
 name: llm-batch
 version: "2"
 description: Ordered prompt batches against a warm loopback vLLM server pinned to a reviewed Qwen3.5-9B AWQ checkpoint.
@@ -43,7 +43,7 @@ routes:
       min_disk_mb: 30720
     executor:
       type: plugin
-      handler: gpu_orchestrator_workloads.qwen:VllmBatchExecutor
+      handler: sparehour_workloads.qwen:VllmBatchExecutor
       timeout_seconds: 1800
       environment:
         VLLM_BASE_URL: http://127.0.0.1:8000

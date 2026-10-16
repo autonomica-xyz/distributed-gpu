@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "distributed-gpu"
+name = "sparehour"
 version = "0.1.0"
 description = "A workload-defined control plane for distributing independent jobs across GPU fleets"
 readme = "README.md"
@@ -46,15 +46,15 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/example/distributed-gpu"
-Repository = "https://github.com/example/distributed-gpu"
-Issues = "https://github.com/example/distributed-gpu/issues"
+Homepage = "https://github.com/autonomica-xyz/sparehour"
+Repository = "https://github.com/autonomica-xyz/sparehour"
+Issues = "https://github.com/autonomica-xyz/sparehour/issues"
 
 [project.scripts]
-dgpu = "gpu_orchestrator.cli:main"
+sparehour = "sparehour.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/gpu_orchestrator", "src/gpu_orchestrator_workloads"]
+packages = ["src/sparehour", "src/sparehour_workloads"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

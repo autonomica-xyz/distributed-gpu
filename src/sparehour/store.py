@@ -410,7 +410,7 @@ class Store:
         if self.path == ":memory:":
             # A keeper connection is required because each operation uses its
             # own connection and a normal :memory: DB is connection-local.
-            self.path = f"file:dgpu-{secrets.token_hex(8)}?mode=memory&cache=shared"
+            self.path = f"file:sparehour-{secrets.token_hex(8)}?mode=memory&cache=shared"
             self._memory_connection = self._connect()
         with self._connection() as conn:
             conn.executescript(SCHEMA)
@@ -1526,13 +1526,13 @@ class Store:
                     _iso(self.clock()),
                 ),
             )
-        return f"dgpu.{identifier}.{secret}"
+        return f"sph_{identifier}.{secret}"
 
     def authenticate(self, raw_token: str) -> dict[str, Any]:
-        parts = raw_token.split(".", 2)
-        if len(parts) != 3 or parts[0] != "dgpu" or not parts[1] or not parts[2]:
+        parts = raw_token.removeprefix("sph_").split(".", 1)
+        if not raw_token.startswith("sph_") or len(parts) != 2 or not parts[0] or not parts[1]:
             raise PermissionError("invalid token format")
-        token_id, secret = parts[1], parts[2]
+        token_id, secret = parts
         with self._connection() as conn:
             row = conn.execute(
                 "SELECT * FROM auth_tokens WHERE id = ?", (token_id,)

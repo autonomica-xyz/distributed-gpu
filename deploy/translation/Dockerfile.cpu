@@ -4,17 +4,17 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     ARGOS_MODEL_DIR=/opt/models/en_es \
-    DGPU_TRANSLATE_DEVICE_OVERRIDE=cpu
+    SPAREHOUR_TRANSLATE_DEVICE_OVERRIDE=cpu
 
-COPY dist/distributed_gpu-*.whl /tmp/
+COPY dist/sparehour-*.whl /tmp/
 RUN python3 -m pip install --no-cache-dir \
-      /tmp/distributed_gpu-*.whl \
+      /tmp/sparehour-*.whl \
       ctranslate2==4.8.1 \
       sentencepiece==0.2.2 \
       sacremoses==0.1.1 \
       subword-nmt==0.3.8 \
-    && rm /tmp/distributed_gpu-*.whl
+    && rm /tmp/sparehour-*.whl
 COPY state/model-packs/en_es/ /opt/models/en_es/
 
-ENTRYPOINT ["dgpu"]
+ENTRYPOINT ["sparehour"]
 CMD ["--help"]

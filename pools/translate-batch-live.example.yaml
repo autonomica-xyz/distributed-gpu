@@ -1,10 +1,10 @@
 # Example pool: ordered translation-batch workers on rented capacity.
 #
 # The image below is the official Python 3.10 LibreTranslate CUDA image pinned
-# by digest. The DGPU wheel supports Python >=3.10. For production, build an
+# by digest. The SPAREHOUR wheel supports Python >=3.10. For production, build an
 # image that pre-bakes the wheel, sitecustomize shim, and audited language packs,
 # then pin that digest here — startup installation/download is integration-only.
-api_version: distributed-gpu.example/v1alpha1
+api_version: sparehour.example/v1alpha1
 id: translate-batch-live
 workload: translate-text-batch
 route: libretranslate-batch-v1
@@ -18,11 +18,11 @@ command:
     --disable-files-translation --char-limit 20000 --batch-limit 64
     --req-limit 1200 --load-only en,ar,bg,bn,ca,cs,da,de,el,es,fa,fr,he,hi,hu,id,it,ja,ko,lv,nl,pl,pt,ro,ru,sl,sq,sv,sw,th,tr,uk,vi,zh &
     MODEL_PID=$!;
-    python -m pip install --no-cache-dir "$DGPU_WHEEL_URL" &&
+    python -m pip install --no-cache-dir "$SPAREHOUR_WHEEL_URL" &&
     until python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/languages',timeout=5)";
     do kill -0 "$MODEL_PID" || exit 1; sleep 5; done &&
-    exec dgpu agent --endpoint "$DGPU_ENDPOINT" --agent-id "$DGPU_AGENT_ID"
-    --provider salad --provider-resource-id "$DGPU_PROVIDER_RESOURCE_ID"
+    exec sparehour agent --endpoint "$SPAREHOUR_ENDPOINT" --agent-id "$SPAREHOUR_AGENT_ID"
+    --provider salad --provider-resource-id "$SPAREHOUR_PROVIDER_RESOURCE_ID"
     --capability libretranslate-batch --model-pack libretranslate-1.9.6-bounded-sbd
     --label pool=translate-batch-live --workdir /work --heartbeat-seconds 15
     --lease-seconds 120 --poll-seconds 2

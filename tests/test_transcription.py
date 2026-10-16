@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from gpu_orchestrator.agent import ExecutionError
-from gpu_orchestrator_workloads import transcription
+from sparehour.agent import ExecutionError
+from sparehour_workloads import transcription
 
 
 PARAKEET_ENV = {

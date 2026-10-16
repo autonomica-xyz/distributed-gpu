@@ -206,18 +206,18 @@ class DeploymentService:
                 scopes={"routes": [capability]},
                 expires_at=expires_at,
             )
-            token_id = raw_token.split(".")[1]
+            token_id = raw_token.removeprefix("sph_").split(".", 1)[0]
             environment = {
                 **pool.environment,
-                "DGPU_ENDPOINT": self.public_controller_url.rstrip("/"),
-                "DGPU_TOKEN": raw_token,
-                "DGPU_AGENT_ID": worker_id,
-                "DGPU_PROVIDER_RESOURCE_ID": worker_id,
+                "SPAREHOUR_ENDPOINT": self.public_controller_url.rstrip("/"),
+                "SPAREHOUR_TOKEN": raw_token,
+                "SPAREHOUR_AGENT_ID": worker_id,
+                "SPAREHOUR_PROVIDER_RESOURCE_ID": worker_id,
             }
             if self.wheel_url:
-                environment["DGPU_WHEEL_URL"] = self.wheel_url
+                environment["SPAREHOUR_WHEEL_URL"] = self.wheel_url
             command = [
-                argument.replace("${DGPU_AGENT_ID}", worker_id)
+                argument.replace("${SPAREHOUR_AGENT_ID}", worker_id)
                 for argument in pool.command
             ]
             spec = WorkerLaunchSpec(

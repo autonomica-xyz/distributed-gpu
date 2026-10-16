@@ -36,4 +36,4 @@ lands back in the workbench
 8
 00:00:39,000 --> 00:00:45,000
 Controller GPL-3.0-or-later · Worker MIT
-github.com/autonomica-xyz/distributed-gpu
+github.com/autonomica-xyz/sparehour

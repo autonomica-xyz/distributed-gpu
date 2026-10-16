@@ -27,7 +27,7 @@ from .service import Orchestrator, OutputContractError
 from .store import ConflictError, LeaseError, NotFoundError, StoreError
 
 
-LeaseHeader = Annotated[str, Header(alias="X-DGPU-Lease-Token")]
+LeaseHeader = Annotated[str, Header(alias="X-SPAREHOUR-Lease-Token")]
 LOGGER = logging.getLogger(__name__)
 
 
@@ -159,7 +159,7 @@ def create_app(
                 with suppress(asyncio.CancelledError): await task
 
     app = FastAPI(
-        title="Distributed GPU Control Plane",
+        title="Sparehour Control Plane",
         version="0.1.0",
         description="Distribute independent jobs across inventory-matched GPU slots.",
         lifespan=lifespan,
@@ -173,7 +173,7 @@ def create_app(
             drivers=dict(deployment_service.drivers),
             public_controller_url=deployment_service.public_controller_url,
             wheel_url=deployment_service.wheel_url,
-            allow_apply=(autonomous_apply if autonomous_apply is not None else os.environ.get("DGPU_AUTONOMOUS_APPLY", "").lower() in {"1", "true", "yes"}),
+            allow_apply=(autonomous_apply if autonomous_apply is not None else os.environ.get("SPAREHOUR_AUTONOMOUS_APPLY", "").lower() in {"1", "true", "yes"}),
         )
     app.state.scaling_engine = scaling_engine
     app.state.automation_paused = False
@@ -597,7 +597,7 @@ def create_app(
         sha256: str,
         job_id: str | None = None,
         slot_id: str | None = None,
-        lease_token: Annotated[str | None, Header(alias="X-DGPU-Lease-Token")] = None,
+        lease_token: Annotated[str | None, Header(alias="X-SPAREHOUR-Lease-Token")] = None,
         principal: dict[str, Any] = Depends(any_principal),
     ) -> FileResponse:
         """Serve an input blob to its owning project or the leased agent.

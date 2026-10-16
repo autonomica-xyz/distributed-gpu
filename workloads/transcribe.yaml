@@ -1,4 +1,4 @@
-api_version: distributed-gpu.example/v1alpha1
+api_version: sparehour.example/v1alpha1
 name: transcribe
 version: "2"
 description: >-
@@ -132,7 +132,7 @@ routes:
       min_disk_mb: 20480
     executor:
       type: plugin
-      handler: gpu_orchestrator_workloads.transcription:ParakeetExecutor
+      handler: sparehour_workloads.transcription:ParakeetExecutor
       timeout_seconds: 14400
       environment:
         PARAKEET_MODEL_PACK: parakeet-tdt-0.6b-v3
@@ -163,7 +163,7 @@ routes:
       min_disk_mb: 30720
     executor:
       type: plugin
-      handler: gpu_orchestrator_workloads.transcription:WhisperXExecutor
+      handler: sparehour_workloads.transcription:WhisperXExecutor
       timeout_seconds: 14400
       environment:
         WHISPERX_MODEL_PACK: whisperx-large-v3

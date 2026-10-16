@@ -1,0 +1,54 @@
+[Unit]
+Description=Sparehour public authenticated API backend
+Documentation=file:///opt/sparehour/README.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=sparehour-public
+Group=sparehour
+WorkingDirectory=/srv/sparehour-public
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/srv/sparehour-public/src
+# Keep provider lifecycle and its credentials off the Internet-facing process.
+Environment=SPAREHOUR_PUBLIC_URL=
+# Expose only the executable runtime/config snapshot into this mount namespace.
+BindReadOnlyPaths=/opt/sparehour/.venv:/srv/sparehour-public/.venv
+BindReadOnlyPaths=/opt/sparehour/src:/srv/sparehour-public/src
+BindReadOnlyPaths=/opt/sparehour/workloads:/srv/sparehour-public/workloads
+BindReadOnlyPaths=/opt/sparehour/pools:/srv/sparehour-public/pools
+BindReadOnlyPaths=/opt/sparehour/dist:/srv/sparehour-public/dist
+# The bind contains live state, but filesystem modes expose only control.sqlite3
+# and artifacts to group sparehour; historical test state remains owner-only.
+BindPaths=/opt/sparehour/state:/srv/sparehour-public/state
+InaccessiblePaths=/home /etc/sparehour
+ExecStart=/usr/bin/env /srv/sparehour-public/.venv/bin/python \
+  /srv/sparehour-public/.venv/bin/sparehour serve \
+  --db /srv/sparehour-public/state/control.sqlite3 \
+  --workloads /srv/sparehour-public/workloads \
+  --artifacts /srv/sparehour-public/state/artifacts \
+  --pools /srv/sparehour-public/pools \
+  --bootstrap-dir /srv/sparehour-public/dist \
+  --no-dashboard --host 10.0.0.10 --port 8089 --log-level warning
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=30s
+KillSignal=SIGINT
+UMask=0007
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=full
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

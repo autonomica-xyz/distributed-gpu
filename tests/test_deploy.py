@@ -8,10 +8,10 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from gpu_orchestrator.api import create_app
-from gpu_orchestrator.deploy import DeploymentService
-from gpu_orchestrator.models import ResourceRequirements
-from gpu_orchestrator.providers.base import (
+from sparehour.api import create_app
+from sparehour.deploy import DeploymentService
+from sparehour.models import ResourceRequirements
+from sparehour.providers.base import (
     ProviderOffer,
     ProviderResource,
     WorkerLaunchSpec,
@@ -87,13 +87,13 @@ class FakeSaladDriver(FakeDriver):
 
 def pool_yaml(tmp_path, *, image=DIGEST, with_salad_template=False):
     pool = {
-        "api_version": "distributed-gpu.example/v1alpha1",
+        "api_version": "sparehour.example/v1alpha1",
         "id": "test-pool",
         "workload": "demo-gpu",
         "route": "command",
         "worker_prefix": "testpool",
         "image": image,
-        "command": ["dgpu", "agent", "--agent-id", "${DGPU_AGENT_ID}",
+        "command": ["sparehour", "agent", "--agent-id", "${SPAREHOUR_AGENT_ID}",
                     "--capability", "demo-gpu"],
         "environment": {"EXTRA": "1"},
         "providers": {
@@ -123,7 +123,7 @@ def service(orchestrator, tmp_path, driver):
         drivers={"vast": driver, "salad": driver},
         pools_directory=str(pool_yaml(tmp_path)),
         public_controller_url="https://public.example.com/",
-        wheel_url="https://public.example.com/bootstrap/distributed_gpu-0.1.0-py3-none-any.whl",
+        wheel_url="https://public.example.com/bootstrap/sparehour-0.1.0-py3-none-any.whl",
     )
 
 
@@ -149,7 +149,7 @@ def test_deploy_issues_scoped_worker_credentials_and_records_ledger(service, orc
     assert len(set(worker_ids)) == 2
     assert all(w.startswith("testpool-") for w in worker_ids)
     for spec in service.drivers["vast"].launched:
-        token = spec.environment["DGPU_TOKEN"]
+        token = spec.environment["SPAREHOUR_TOKEN"]
         principal = orchestrator.store.authenticate(token)
         assert principal["role"] == "agent"
         assert principal["subject"] == spec.worker_id
@@ -157,18 +157,18 @@ def test_deploy_issues_scoped_worker_credentials_and_records_ledger(service, orc
         expiry = datetime.fromisoformat(principal["expires_at"])
         assert datetime.now(UTC) < expiry <= datetime.now(UTC) + timedelta(hours=6, minutes=1)
         # workers see only the public URL, identity, and their own token
-        assert spec.environment["DGPU_ENDPOINT"] == "https://public.example.com"
-        assert spec.environment["DGPU_AGENT_ID"] == spec.worker_id
-        assert spec.environment["DGPU_WHEEL_URL"].endswith(".whl")
+        assert spec.environment["SPAREHOUR_ENDPOINT"] == "https://public.example.com"
+        assert spec.environment["SPAREHOUR_AGENT_ID"] == spec.worker_id
+        assert spec.environment["SPAREHOUR_WHEEL_URL"].endswith(".whl")
         assert spec.environment["EXTRA"] == "1"
         assert spec.image == DIGEST
-        assert spec.command[3] == spec.worker_id  # ${DGPU_AGENT_ID} substituted
+        assert spec.command[3] == spec.worker_id  # ${SPAREHOUR_AGENT_ID} substituted
     assert [r["resource_id"] for r in rows] == ["res-1", "res-2"]
 
 
 def test_deploy_rejects_unknown_pool_disabled_provider_and_bad_counts(service):
-    from gpu_orchestrator.deploy import DeploymentError
-    from gpu_orchestrator.store import NotFoundError
+    from sparehour.deploy import DeploymentError
+    from sparehour.store import NotFoundError
 
     with pytest.raises(NotFoundError):  # maps to HTTP 404
         service.deploy(pool_id="nope", provider="vast")
@@ -192,7 +192,7 @@ def test_deploy_rejects_unknown_pool_disabled_provider_and_bad_counts(service):
 def test_deploy_selects_requested_offer_and_rejects_stale_or_insufficient_capacity(
     service, driver
 ):
-    from gpu_orchestrator.deploy import DeploymentError
+    from sparehour.deploy import DeploymentError
 
     driver.offers.append(
         ProviderOffer("vast", "offer-cheap", "RTX 3070", 1, 8192, 0.10,
@@ -225,7 +225,7 @@ def test_deploy_selects_requested_offer_and_rejects_stale_or_insufficient_capaci
 def test_failed_launch_audits_selected_offer_and_retires_token(
     service, orchestrator, driver
 ):
-    from gpu_orchestrator.providers.base import ProviderError
+    from sparehour.providers.base import ProviderError
 
     def reject(_offer, _spec):
         raise ProviderError("provider rejected create")
@@ -299,10 +299,10 @@ def test_background_reconciler_updates_deployments_without_manual_post(
 def test_teardown_refuses_active_jobs_then_verifies_absence_before_retiring_token(
     service, orchestrator, driver
 ):
-    from gpu_orchestrator.store import ConflictError
+    from sparehour.store import ConflictError
 
     row = service.deploy(pool_id="test-pool", provider="vast")[0]
-    token = driver.launched[0].environment["DGPU_TOKEN"]
+    token = driver.launched[0].environment["SPAREHOUR_TOKEN"]
     # worker holds a running job -> teardown must refuse
     register_agent(store=orchestrator.store, agent_id=row["worker_id"])
     job = orchestrator.submit(
@@ -327,7 +327,7 @@ def test_teardown_refuses_active_jobs_then_verifies_absence_before_retiring_toke
     # provider still lists the resource -> destroy verification fails and the
     # credential must NOT be retired until provider inventory is absent
     driver.still_visible_after_destroy = True
-    from gpu_orchestrator.providers.base import ProviderError
+    from sparehour.providers.base import ProviderError
 
     with pytest.raises(ProviderError):
         service.teardown(row["id"])
@@ -395,7 +395,7 @@ def test_deploy_without_public_url_service_mounts_nothing(orchestrator):
 
 
 def test_salad_launch_requires_pool_provider_template(orchestrator, tmp_path):
-    from gpu_orchestrator.deploy import DeploymentError
+    from sparehour.deploy import DeploymentError
 
     driver = FakeSaladDriver()
     service = DeploymentService(
@@ -423,7 +423,7 @@ def test_salad_launch_requires_pool_provider_template(orchestrator, tmp_path):
 
 
 def test_pool_loader_rejects_mutable_image_tags(tmp_path):
-    from gpu_orchestrator.controller import PoolSpec
+    from sparehour.controller import PoolSpec
 
     pool_yaml(tmp_path, image="ghcr.io/example/worker:latest")
     with pytest.raises(Exception, match="digest"):

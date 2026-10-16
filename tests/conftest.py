@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from gpu_orchestrator.models import AgentRegistration, SlotInventory, WorkloadSpec
-from gpu_orchestrator.registry import WorkloadRegistry
-from gpu_orchestrator.service import Orchestrator
-from gpu_orchestrator.store import Store
+from sparehour.models import AgentRegistration, SlotInventory, WorkloadSpec
+from sparehour.registry import WorkloadRegistry
+from sparehour.service import Orchestrator
+from sparehour.store import Store
 
 
 def _load_demo_fixture() -> WorkloadSpec:

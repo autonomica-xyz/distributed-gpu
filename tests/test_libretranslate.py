@@ -8,9 +8,9 @@ import threading
 
 import pytest
 
-from gpu_orchestrator.agent import ExecutionError
-from gpu_orchestrator.registry import AdmissionError
-from gpu_orchestrator_workloads import libretranslate
+from sparehour.agent import ExecutionError
+from sparehour.registry import AdmissionError
+from sparehour_workloads import libretranslate
 
 
 _DEFAULT_LANGUAGES = [

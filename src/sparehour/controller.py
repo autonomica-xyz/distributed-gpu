@@ -44,7 +44,7 @@ class ProviderPolicy(BaseModel):
 class PoolSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    api_version: str = "distributed-gpu.example/v1alpha1"
+    api_version: str = "sparehour.example/v1alpha1"
     id: str = Field(pattern=r"^[a-z][a-z0-9-]{1,62}$")
     workload: str
     route: str

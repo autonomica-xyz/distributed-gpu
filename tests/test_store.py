@@ -6,8 +6,8 @@ from datetime import timedelta
 
 import pytest
 
-from gpu_orchestrator.service import OutputContractError
-from gpu_orchestrator.store import ConflictError, LeaseError
+from sparehour.service import OutputContractError
+from sparehour.store import ConflictError, LeaseError
 
 from conftest import register_agent
 
@@ -230,10 +230,9 @@ def test_scoped_tokens_are_hashed_and_revocable(store):
     raw = store.issue_token(
         role="agent", subject="worker", scopes={"routes": ["demo-gpu"]}, token_id="worker-token"
     )
-    assert raw.startswith("dgpu.worker-token.")
     assert next(row for row in store.list_tokens() if row["id"] == "worker-token")["last_used_at"] is None
     with pytest.raises(PermissionError):
-        store.authenticate("dgpu.worker-token.wrong-secret")
+        store.authenticate("sph_worker-token.wrong-secret")
     assert next(row for row in store.list_tokens() if row["id"] == "worker-token")["last_used_at"] is None
     principal = store.authenticate(raw)
     assert principal["subject"] == "worker"

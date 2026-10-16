@@ -1,4 +1,4 @@
-"""Distributed GPU workload orchestration."""
+"""Sparehour workload orchestration."""
 
 from .registry import WorkloadRegistry
 from .service import Orchestrator

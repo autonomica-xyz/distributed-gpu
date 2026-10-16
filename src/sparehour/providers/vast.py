@@ -28,7 +28,7 @@ class VastProvider:
             base_url,
             {
                 "Authorization": f"Bearer {api_key}",
-                "User-Agent": "distributed-gpu/0.1",
+                "User-Agent": "sparehour/0.1",
             },
             timeout=timeout,
             **kwargs,
@@ -193,8 +193,8 @@ def _first_float(row: dict[str, Any], *keys: str) -> float | None:
 
 def _worker_id(row: dict[str, Any], label: str) -> str | None:
     env = row.get("env")
-    if isinstance(env, dict) and env.get("DGPU_AGENT_ID"):
-        return str(env["DGPU_AGENT_ID"])
+    if isinstance(env, dict) and env.get("SPAREHOUR_AGENT_ID"):
+        return str(env["SPAREHOUR_AGENT_ID"])
     if "worker_id=" in label:
         return label.split("worker_id=", 1)[1].split()[0]
     return None

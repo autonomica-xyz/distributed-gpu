@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from gpu_orchestrator.registry import AdmissionError
+from sparehour.registry import AdmissionError
 
 
 def test_loads_example_workloads(registry):

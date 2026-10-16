@@ -1,20 +1,20 @@
-api_version: distributed-gpu.example/v1alpha1
+api_version: sparehour.example/v1alpha1
 id: image-standard
 workload: image-generate
 route: diffusers-sdxl
 worker_prefix: image-standard
-image: ghcr.io/example/distributed-gpu-image-worker@sha256:0000000000000000000000000000000000000000000000000000000000000000
+image: ghcr.io/example/sparehour-image-worker@sha256:0000000000000000000000000000000000000000000000000000000000000000
 command:
-  - dgpu
+  - sparehour
   - agent
   - --agent-id
-  - "${DGPU_AGENT_ID}"
+  - "${SPAREHOUR_AGENT_ID}"
   - --capability
   - image-generate
   - --model-pack
   - sdxl-base-1.0-fp16-76d28af
 environment:
-  DGPU_ENDPOINT: https://gpu-control.example.com
+  SPAREHOUR_ENDPOINT: https://gpu-control.example.com
   IMAGE_WORKER_PROFILE: diffusers-sdxl
 providers:
   local:

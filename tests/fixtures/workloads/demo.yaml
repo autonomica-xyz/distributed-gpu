@@ -1,4 +1,4 @@
-api_version: distributed-gpu.example/v1alpha1
+api_version: sparehour.example/v1alpha1
 name: demo-gpu
 version: "1"
 description: A tiny command workload used for local and CI end-to-end tests.
@@ -33,7 +33,7 @@ routes:
       min_disk_mb: 0
     executor:
       type: command
-      command: ["{agent_python}", -m, gpu_orchestrator.demo_executor]
+      command: ["{agent_python}", -m, sparehour.demo_executor]
       timeout_seconds: 60
     cost:
       unit: item

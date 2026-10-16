@@ -161,7 +161,7 @@ class ControlPlaneClient:
                 f"/v1/jobs/{job_id}/outputs/{name}",
                 params={"slot_id": slot_id},
                 headers={
-                    "X-DGPU-Lease-Token": lease_token,
+                    "X-SPAREHOUR-Lease-Token": lease_token,
                     "Content-Type": media_type,
                 },
                 content=handle,
@@ -204,7 +204,7 @@ class ControlPlaneClient:
         response = self.client.post(
             f"/v1/jobs/{job_id}/{action}",
             params={"slot_id": slot_id, **(params or {})},
-            headers={"X-DGPU-Lease-Token": lease_token},
+            headers={"X-SPAREHOUR-Lease-Token": lease_token},
             json=json_body,
         )
         return self._json(response, action)
@@ -264,7 +264,7 @@ class ControlPlaneClient:
                 "GET",
                 path,
                 params={"job_id": job_id, "slot_id": slot_id},
-                headers={"X-DGPU-Lease-Token": lease_token},
+                headers={"X-SPAREHOUR-Lease-Token": lease_token},
             ) as response:
                 if response.status_code < 200 or response.status_code >= 300:
                     raise AgentError(
@@ -439,7 +439,7 @@ class AgentRunner:
         token = job["lease_token"]
         self.client.confirm(job_id, slot.id, token)
         workdir = Path(
-            tempfile.mkdtemp(prefix=f"dgpu-{job_id}-", dir=self.config.workdir_root)
+            tempfile.mkdtemp(prefix=f"sparehour-{job_id}-", dir=self.config.workdir_root)
         )
         lease = _LeaseKeeper(
             self.client,
@@ -667,10 +667,10 @@ class AgentRunner:
             **os.environ,
             **executor.get("environment", {}),
             "CUDA_VISIBLE_DEVICES": str(slot.gpu_index),
-            "DGPU_JOB_ID": job["id"],
-            "DGPU_REQUEST_JSON": str(request_path),
-            "DGPU_OUTPUT_DIR": str(workdir),
-            "DGPU_OUTPUT_MANIFEST": str(output_manifest),
+            "SPAREHOUR_JOB_ID": job["id"],
+            "SPAREHOUR_REQUEST_JSON": str(request_path),
+            "SPAREHOUR_OUTPUT_DIR": str(workdir),
+            "SPAREHOUR_OUTPUT_MANIFEST": str(output_manifest),
         }
         command = [
             sys.executable if argument == "{agent_python}" else argument
@@ -685,19 +685,19 @@ class AgentRunner:
                 "run",
                 "--rm",
                 "--name",
-                f"dgpu-{job['id'][:48]}",
+                f"sparehour-{job['id'][:48]}",
                 "--gpus",
                 f"device={slot.gpu_uuid}",
                 "--mount",
                 f"type=bind,src={workdir},dst=/job",
                 "-e",
-                "DGPU_JOB_ID",
+                "SPAREHOUR_JOB_ID",
                 "-e",
-                "DGPU_REQUEST_JSON=/job/request.json",
+                "SPAREHOUR_REQUEST_JSON=/job/request.json",
                 "-e",
-                "DGPU_OUTPUT_DIR=/job",
+                "SPAREHOUR_OUTPUT_DIR=/job",
                 "-e",
-                "DGPU_OUTPUT_MANIFEST=/job/outputs.json",
+                "SPAREHOUR_OUTPUT_MANIFEST=/job/outputs.json",
                 *container_environment,
                 executor["image"],
                 *executor["command"],
